@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Libreta — Control de finanzas</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --bg:#151b24;
+  --surface:#1c2530;
+  --surface-2:#242f3d;
+  --border:#2c3948;
+  --text:#e9e6dd;
+  --text-dim:#8b96a3;
+  --accent:#c9824f;
+  --accent-soft:#e0a878;
+  --income:#6fa98b;
+  --income-soft:#284138;
+  --expense:#c96f6f;
+  --expense-soft:#3d2828;
+  --radius:10px;
+}
+
+*{box-sizing:border-box; margin:0; padding:0;}
+
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'IBM Plex Sans', sans-serif;
+  min-height:100vh;
+  padding-bottom:80px;
+  -webkit-font-smoothing:antialiased;
+}
+
+.mono{ font-family:'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+.hidden{ display:none !important; }
+
+/* ---------- Header ---------- */
+header.app-header{
+  padding:28px 20px 20px;
+  max-width:960px;
+  margin:0 auto;
+}
+.brand{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  margin-bottom:22px;
+}
+.brand .mark{ width:10px; height:10px; border-radius:50%; background:var(--accent); display:inline-block; }
+.brand h1{ font-family:'Fraunces', serif; font-weight:600; font-size:22px; letter-spacing:0.02em; }
+.brand span.tag{ color:var(--text-dim); font-size:12px; font-family:'IBM Plex Mono', monospace; text-transform:uppercase; letter-spacing:0.08em; }
+.brand .spacer{ flex:1; }
+.brand .user-email{ font-size:12px; color:var(--text-dim); font-family:'IBM Plex Mono', monospace; }
+.brand .logout-link{ background:none; border:none; color:var(--text-dim); font-size:12px; text-decoration:underline; cursor:pointer; }
+
+/* ---------- Hero balance ---------- */
+.hero{
+  background:linear-gradient(150deg, var(--surface) 0%, var(--surface-2) 100%);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:26px 24px;
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:20px;
+  align-items:end;
+}
+.hero-label{ font-family:'IBM Plex Mono', monospace; font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-dim); margin-bottom:6px; }
+.hero-amount{ font-family:'Fraunces', serif; font-weight:600; font-size:44px; line-height:1; letter-spacing:-0.01em; }
+.hero-amount.neg{ color:var(--expense); }
+.hero-sub{ margin-top:10px; display:flex; gap:18px; flex-wrap:wrap; }
+.hero-stat{ font-size:13px; color:var(--text-dim); }
+.hero-stat b{ color:var(--text); font-weight:600; }
+.hero-stat.income b{ color:var(--income); }
+.hero-stat.expense b{ color:var(--expense); }
+.sparkline{ width:220px; height:70px; }
+@media (max-width:640px){
+  .hero{ grid-template-columns:1fr; }
+  .sparkline{ width:100%; }
+}
+
+/* ---------- Actions row ---------- */
+.actions-row{ max-width:960px; margin:18px auto 0; padding:0 20px; display:flex; gap:10px; justify-content:flex-end; }
+button{ font-family:'IBM Plex Sans', sans-serif; cursor:pointer; border:none; border-radius:8px; transition:transform .12s ease, background .15s ease, opacity .15s ease; }
+button:active{ transform:scale(0.97); }
+.btn-primary{ background:var(--accent); color:#1a130c; font-weight:600; font-size:14px; padding:11px 18px; display:inline-flex; align-items:center; gap:8px; }
+.btn-primary:hover{ background:var(--accent-soft); }
+.btn-primary:disabled{ opacity:0.5; cursor:default; }
+.btn-ghost{ background:transparent; border:1px solid var(--border); color:var(--text-dim); font-size:13px; padding:10px 14px; }
+.btn-ghost:hover{ color:var(--text); border-color:var(--text-dim); }
+
+/* ---------- Nav tabs ---------- */
+.nav-tabs{ max-width:960px; margin:0 auto 18px; padding:0 20px; display:flex; gap:4px; border-bottom:1px solid var(--border); }
+.nav-tab{ background:transparent; color:var(--text-dim); font-size:14px; font-weight:500; padding:12px 4px; margin-right:22px; border-radius:0; border-bottom:2px solid transparent; position:relative; top:1px; }
+.nav-tab.active{ color:var(--text); border-bottom:2px solid var(--accent); font-weight:600; }
+.view{ animation:fadein .18s ease; display:block; }
+@keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+/* ---------- Months ---------- */
+main{ max-width:960px; margin:14px auto 24px; padding:0 20px; }
+
+.month-block{ margin-bottom:22px; border:1px solid var(--border); border-radius:14px; overflow:hidden; background:var(--surface); }
+.month-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 18px; cursor:pointer; user-select:none; }
+.month-head:hover{ background:var(--surface-2); }
+.month-title{ font-family:'Fraunces', serif; font-weight:600; font-size:18px; text-transform:capitalize; }
+.month-figures{ display:flex; gap:16px; align-items:center; font-size:13px; }
+.month-figures .chip{ font-family:'IBM Plex Mono', monospace; padding:3px 9px; border-radius:20px; font-size:12px; }
+.chip.income{ background:var(--income-soft); color:var(--income); }
+.chip.expense{ background:var(--expense-soft); color:var(--expense); }
+.chip.benefit{ background:var(--surface-2); color:var(--text); border:1px solid var(--border); }
+.caret{ color:var(--text-dim); transition:transform .2s ease; font-size:12px; }
+.month-block.collapsed .caret{ transform:rotate(-90deg); }
+.month-block.collapsed .tx-list{ display:none; }
+
+.tx-list{ border-top:1px solid var(--border); }
+.tx-row{ display:grid; grid-template-columns:90px 1fr 110px 40px; gap:12px; align-items:center; padding:11px 18px; border-bottom:1px solid var(--border); font-size:14px; cursor:pointer; }
+.tx-row:last-child{ border-bottom:none; }
+.tx-row:hover{ background:var(--surface-2); }
+.tx-date{ color:var(--text-dim); font-size:12.5px; }
+.tx-desc{ color:var(--text); }
+.tx-desc-sub{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--text-dim); margin-top:2px; }
+.tx-amount{ text-align:right; font-weight:600; }
+.tx-amount.income{ color:var(--income); }
+.tx-amount.expense{ color:var(--expense); }
+.tx-edit{ text-align:right; color:var(--text-dim); font-size:12px; opacity:0; transition:opacity .15s; }
+.tx-row:hover .tx-edit{ opacity:1; }
+
+@media (max-width:640px){
+  .tx-row{ grid-template-columns:1fr auto; grid-template-areas:"desc amount" "date edit"; row-gap:4px; }
+  .tx-date{ grid-area:date; }
+  .tx-desc{ grid-area:desc; }
+  .tx-amount{ grid-area:amount; }
+  .tx-edit{ grid-area:edit; opacity:1; }
+  .month-figures{ display:none; }
+}
+
+/* ---------- Filter tabs ---------- */
+.filter-tabs{ display:flex; gap:6px; max-width:960px; margin:0 auto 0; padding:0 20px; }
+.filter-tab{ background:var(--surface); border:1px solid var(--border); color:var(--text-dim); font-size:13px; padding:8px 14px; border-radius:20px; }
+.filter-tab.active{ background:var(--surface-2); color:var(--text); border-color:var(--accent); }
+
+/* ---------- History chart ---------- */
+.history{ max-width:960px; margin:0 auto 18px; padding:0 20px; }
+.history-card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px 18px 8px; }
+.history-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.history-title{ font-family:'Fraunces', serif; font-weight:600; font-size:16px; }
+.history-legend{ display:flex; gap:14px; font-size:11.5px; color:var(--text-dim); }
+.history-legend span{ display:inline-flex; align-items:center; gap:5px; }
+.history-legend i{ width:8px; height:8px; border-radius:2px; display:inline-block; }
+.history-legend i.income{ background:var(--income); }
+.history-legend i.expense{ background:var(--expense); }
+.history-scroll{ overflow-x:auto; padding-bottom:6px; }
+.history-chart-svg{ display:block; }
+
+/* ---------- Historial cards ---------- */
+.historial-cards{ max-width:960px; margin:18px auto 24px; padding:0 20px; display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:14px; }
+.hist-card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px; }
+.hist-card-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.hist-month{ font-family:'Fraunces', serif; font-weight:600; font-size:17px; text-transform:capitalize; }
+.hist-trend{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; padding:3px 8px; border-radius:20px; background:var(--surface-2); }
+.hist-trend.up{ color:var(--income); }
+.hist-trend.down{ color:var(--expense); }
+.hist-trend.flat{ color:var(--text-dim); }
+.hist-stats{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:14px; }
+.hist-stat{ background:var(--surface-2); border-radius:10px; padding:10px 8px; text-align:center; }
+.hist-stat .lbl{ font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); font-family:'IBM Plex Mono', monospace; margin-bottom:5px; }
+.hist-stat .val{ font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:14.5px; }
+.hist-stat.saved .val{ color:var(--accent-soft); }
+.hist-stat.income .val{ color:var(--income); }
+.hist-stat.expense .val{ color:var(--expense); }
+.hist-bar{ height:6px; border-radius:4px; background:var(--expense-soft); overflow:hidden; margin-bottom:12px; }
+.hist-bar-fill{ height:100%; background:var(--income); border-radius:4px; }
+.hist-foot{ display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text-dim); border-top:1px solid var(--border); padding-top:10px; }
+.hist-foot .amt{ color:var(--text); font-family:'IBM Plex Mono', monospace; }
+.hist-foot .top-expense{ max-width:60%; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ---------- Tarjetas tab ---------- */
+.cards-wrap{ max-width:560px; margin:0 auto; padding:0 20px 24px; }
+.card-add-row{ display:flex; gap:8px; margin-bottom:18px; }
+.card-add-row input{
+  flex:1; background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+  padding:11px 12px; color:var(--text); font-size:15px;
+}
+.card-add-row input:focus{ outline:none; border-color:var(--accent); }
+.card-item{
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:13px 16px; margin-bottom:8px;
+}
+.card-item-name{ display:flex; align-items:center; gap:10px; font-size:14.5px; }
+.card-item-name .dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); }
+.card-remove{ background:none; border:none; color:var(--text-dim); font-size:13px; text-decoration:underline; }
+.card-remove:hover{ color:var(--expense); }
+.cards-empty{ color:var(--text-dim); font-size:13.5px; text-align:center; padding:30px 0; }
+
+/* ---------- Empty state ---------- */
+.empty{ text-align:center; padding:60px 20px; color:var(--text-dim); }
+.empty svg{ margin-bottom:16px; opacity:0.5; }
+.empty h3{ font-family:'Fraunces', serif; color:var(--text); font-size:20px; margin-bottom:6px; font-weight:600; }
+
+/* ---------- Modal ---------- */
+.overlay{ position:fixed; inset:0; background:rgba(10,13,18,0.6); backdrop-filter:blur(2px); display:flex; align-items:flex-end; justify-content:center; z-index:50; opacity:0; pointer-events:none; transition:opacity .18s ease; }
+.overlay.open{ opacity:1; pointer-events:all; }
+@media (min-width:640px){ .overlay{ align-items:center; } }
+.modal{ background:var(--surface); border:1px solid var(--border); border-radius:16px 16px 0 0; width:100%; max-width:440px; padding:24px; transform:translateY(20px); transition:transform .2s ease; max-height:88vh; overflow-y:auto; }
+.overlay.open .modal{ transform:translateY(0); }
+@media (min-width:640px){ .modal{ border-radius:16px; } }
+.modal h2{ font-family:'Fraunces', serif; font-size:20px; font-weight:600; margin-bottom:18px; }
+.type-toggle{ display:flex; gap:8px; margin-bottom:16px; }
+.type-btn{ flex:1; padding:11px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim); font-weight:600; font-size:14px; }
+.type-btn.active.gasto{ background:var(--expense-soft); color:var(--expense); border-color:var(--expense); }
+.type-btn.active.ingreso{ background:var(--income-soft); color:var(--income); border-color:var(--income); }
+.method-btn{ flex:1; padding:11px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim); font-weight:600; font-size:14px; }
+.method-btn.active{ background:var(--surface-2); color:var(--accent-soft); border-color:var(--accent); }
+
+.field{ margin-bottom:14px; }
+.field label{ display:block; font-size:12px; color:var(--text-dim); margin-bottom:6px; font-family:'IBM Plex Mono', monospace; text-transform:uppercase; letter-spacing:0.05em; }
+.field input, .field select{ width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:11px 12px; color:var(--text); font-family:'IBM Plex Sans', sans-serif; font-size:15px; }
+.field input:focus, .field select:focus{ outline:none; border-color:var(--accent); }
+.field input.mono-input{ font-family:'IBM Plex Mono', monospace; }
+.field-hint{ font-size:12px; color:var(--text-dim); margin-top:6px; }
+.field-hint a{ color:var(--accent-soft); cursor:pointer; text-decoration:underline; }
+
+.modal-actions{ display:flex; gap:10px; margin-top:20px; }
+.modal-actions .btn-primary{ flex:1; justify-content:center; padding:12px; }
+.btn-delete{ background:transparent; color:var(--expense); border:1px solid var(--expense); padding:12px 16px; font-size:13px; }
+
+.toast{ position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--surface-2); border:1px solid var(--border); padding:10px 18px; border-radius:30px; font-size:13px; opacity:0; transition:all .25s ease; pointer-events:none; z-index:60; max-width:90vw; text-align:center; }
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+.fab{ position:fixed; bottom:22px; right:22px; width:56px; height:56px; border-radius:50%; background:var(--accent); color:#1a130c; font-size:26px; display:none; align-items:center; justify-content:center; box-shadow:0 6px 20px rgba(0,0,0,0.35); z-index:40; }
+@media (max-width:640px){
+  .actions-row .btn-primary span.label{ display:none; }
+  .fab{ display:flex; }
+  .actions-row{ display:none; }
+}
+
+.loading{ text-align:center; padding:80px 20px; color:var(--text-dim); font-family:'IBM Plex Mono', monospace; font-size:13px;}
+
+/* ---------- Auth / setup screens ---------- */
+.center-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+.auth-card{ width:100%; max-width:380px; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:28px 26px; }
+.auth-card .brand{ margin-bottom:20px; justify-content:center; }
+.auth-card h2{ font-family:'Fraunces', serif; font-size:19px; font-weight:600; margin-bottom:6px; text-align:center; }
+.auth-card p.sub{ font-size:13px; color:var(--text-dim); text-align:center; margin-bottom:22px; }
+.auth-error{ background:var(--expense-soft); color:var(--expense); font-size:13px; padding:10px 12px; border-radius:8px; margin-bottom:14px; display:none; }
+.auth-error.show{ display:block; }
+.auth-switch{ text-align:center; margin-top:16px; font-size:13px; color:var(--text-dim); }
+.auth-switch a{ color:var(--accent-soft); cursor:pointer; text-decoration:underline; }
+.auth-card .btn-primary{ width:100%; justify-content:center; padding:12px; margin-top:4px; }
+
+.setup-card{ width:100%; max-width:560px; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:30px; }
+.setup-card h2{ font-family:'Fraunces', serif; font-size:20px; margin-bottom:10px; }
+.setup-card p{ font-size:14px; color:var(--text-dim); line-height:1.6; margin-bottom:14px; }
+.setup-card ol{ padding-left:20px; margin-bottom:16px; }
+.setup-card li{ font-size:13.5px; color:var(--text); line-height:1.9; }
+.setup-card code{ background:var(--surface-2); padding:2px 6px; border-radius:4px; font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--accent-soft); }
+.setup-card pre{ background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:14px; font-family:'IBM Plex Mono', monospace; font-size:12px; overflow-x:auto; color:var(--text-dim); margin-bottom:16px; }
+</style>
+</head>
+<body>
+
+<!-- ============ SETUP SCREEN (shown until Firebase config is filled in) ============ -->
+<div class="center-screen" id="setupScreen">
+  <div class="setup-card">
+    <div class="brand"><span class="mark"></span><h1>Libreta</h1></div>
+    <h2>Configura tu acceso privado</h2>
+    <p>Para usar esta app fuera de Claude, en cualquier dispositivo, con tus propios datos privados y sincronizados, necesita conectarse a una base de datos gratuita tuya (Firebase de Google). Son 5 minutos, una sola vez.</p>
+    <ol>
+      <li>Entra en <code>console.firebase.google.com</code> y crea un proyecto nuevo (gratis).</li>
+      <li>En el menú del proyecto, ve a <code>Compilación → Authentication</code>, pulsa "Comenzar" y activa el proveedor <code>Correo electrónico/contraseña</code>.</li>
+      <li>Ve a <code>Compilación → Firestore Database</code>, crea la base de datos (modo producción) y en "Reglas" pega esto y publica:
+        <pre>rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}</pre>
+      </li>
+      <li>Ve a <code>⚙️ Configuración del proyecto</code> → pestaña "General" → sección "Tus apps" → icono <code>&lt;/&gt;</code> (Web) → registra la app y copia el objeto <code>firebaseConfig</code>.</li>
+      <li>Pega esos valores en el archivo HTML de esta app, al principio del <code>&lt;script&gt;</code>, sustituyendo el objeto <code>firebaseConfig</code> de ejemplo.</li>
+      <li>Guarda el archivo y ábrelo en tu navegador (o súbelo gratis a Netlify, GitHub Pages o Firebase Hosting para tener una URL). Crea tu cuenta la primera vez con tu email y una contraseña, y listo: entra con esa misma cuenta desde cualquier dispositivo.</li>
+    </ol>
+    <p style="margin-bottom:0;">Solo tú tendrás esa contraseña, así que solo tú podrás entrar y ver tus datos.</p>
+  </div>
+</div>
+
+<!-- ============ AUTH SCREEN (login / signup) ============ -->
+<div class="center-screen hidden" id="authScreen">
+  <div class="auth-card">
+    <div class="brand"><span class="mark"></span><h1>Libreta</h1></div>
+    <h2 id="authTitle">Inicia sesión</h2>
+    <p class="sub" id="authSub">Accede con tu cuenta para ver tus finanzas en cualquier dispositivo.</p>
+    <div class="auth-error" id="authError"></div>
+    <div class="field">
+      <label for="authEmail">Correo electrónico</label>
+      <input type="email" id="authEmail" placeholder="tucorreo@ejemplo.com">
+    </div>
+    <div class="field">
+      <label for="authPassword">Contraseña</label>
+      <input type="password" id="authPassword" placeholder="••••••••">
+    </div>
+    <button class="btn-primary" id="authSubmitBtn">Entrar</button>
+    <div class="auth-switch" id="authSwitch">¿Primera vez? <a id="authToggle">Crea tu cuenta</a></div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="appRoot" class="hidden">
+
+<header class="app-header">
+  <div class="brand">
+    <span class="mark"></span>
+    <h1>Libreta</h1>
+    <span class="tag">Control de finanzas</span>
+    <span class="spacer"></span>
+    <span class="user-email mono" id="userEmail"></span>
+    <button class="logout-link" id="logoutBtn">Cerrar sesión</button>
+  </div>
+
+  <div class="hero" id="hero">
+    <div>
+      <div class="hero-label">Total ahorrado</div>
+      <div class="hero-amount mono" id="heroAmount">—</div>
+      <div class="hero-sub">
+        <div class="hero-stat income">Ingresos <b id="heroIncome" class="mono">—</b></div>
+        <div class="hero-stat expense">Gastos <b id="heroExpense" class="mono">—</b></div>
+      </div>
+    </div>
+    <svg class="sparkline" id="sparkline" viewBox="0 0 220 70" preserveAspectRatio="none"></svg>
+  </div>
+</header>
+
+<nav class="nav-tabs" id="navTabs">
+  <button class="nav-tab active" data-view="movimientos">Movimientos</button>
+  <button class="nav-tab" data-view="historial">Historial</button>
+  <button class="nav-tab" data-view="tarjetas">Tarjetas</button>
+</nav>
+
+<section id="viewMovimientos" class="view">
+  <div class="actions-row">
+    <button class="btn-ghost" id="exportBtn">Exportar CSV</button>
+    <button class="btn-primary" id="addBtn">+ <span class="label">Añadir movimiento</span></button>
+  </div>
+
+  <div class="filter-tabs" id="filterTabs" style="margin-top:16px;">
+    <button class="filter-tab active" data-filter="all">Todos</button>
+    <button class="filter-tab" data-filter="ingreso">Ingresos</button>
+    <button class="filter-tab" data-filter="gasto">Gastos</button>
+  </div>
+
+  <main id="main">
+    <div class="loading">Cargando tu libreta…</div>
+  </main>
+</section>
+
+<section id="viewHistorial" class="view hidden">
+  <div class="history" style="margin-top:16px;">
+    <div class="history-card">
+      <div class="history-head">
+        <div class="history-title">Ahorro y gasto por mes</div>
+        <div class="history-legend">
+          <span><i class="income"></i>Ingresos</span>
+          <span><i class="expense"></i>Gastos</span>
+        </div>
+      </div>
+      <div class="history-scroll">
+        <svg class="history-chart-svg" id="historyChart"></svg>
+      </div>
+    </div>
+  </div>
+  <div id="historialCards" class="historial-cards"></div>
+</section>
+
+<section id="viewTarjetas" class="view hidden">
+  <div class="cards-wrap" style="margin-top:16px;">
+    <div class="card-add-row">
+      <input type="text" id="newCardInput" placeholder="Ej. Visa BBVA, Revolut...">
+      <button class="btn-primary" id="addCardBtn">Añadir</button>
+    </div>
+    <div id="cardsList"></div>
+  </div>
+</section>
+
+<button class="fab" id="fabBtn">+</button>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2 id="modalTitle">Nuevo movimiento</h2>
+    <div class="type-toggle">
+      <button class="type-btn ingreso" id="typeIngreso" type="button">Ingreso</button>
+      <button class="type-btn gasto active" id="typeGasto" type="button">Gasto</button>
+    </div>
+    <div class="field">
+      <label for="fAmount">Cantidad (€)</label>
+      <input type="number" id="fAmount" class="mono-input" step="0.01" min="0" placeholder="0.00">
+    </div>
+    <div class="field">
+      <label for="fDesc">Descripción</label>
+      <input type="text" id="fDesc" placeholder="Ej. Cena con amigos">
+    </div>
+    <div class="field">
+      <label for="fDate">Fecha</label>
+      <input type="date" id="fDate">
+    </div>
+    <div class="field">
+      <label>Método de pago</label>
+      <div class="type-toggle">
+        <button class="method-btn active" id="methodEfectivo" type="button">Efectivo</button>
+        <button class="method-btn" id="methodTarjeta" type="button">Tarjeta</button>
+      </div>
+    </div>
+    <div class="field" id="cardSelectField" style="display:none;">
+      <label for="fCardSelect">Tarjeta</label>
+      <select id="fCardSelect"></select>
+      <div class="field-hint">¿Falta una? <a id="goToCardsLink">Añádela en la pestaña Tarjetas</a></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-delete" id="deleteBtn" style="display:none;">Eliminar</button>
+      <button class="btn-primary" id="saveBtn">Guardar</button>
+    </div>
+    <div style="text-align:center; margin-top:14px;">
+      <button class="btn-ghost" id="cancelBtn" style="border:none;">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+</div><!-- /appRoot -->
+
+<script>
+/* =========================================================================
+   PASO 1: Sustituye este objeto por el "firebaseConfig" real de tu proyecto
+   (lo encuentras en Configuración del proyecto → Tus apps, en la consola
+   de Firebase). Mientras tenga estos valores de ejemplo, la app mostrará
+   la pantalla de configuración en vez de arrancar.
+   ========================================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCj4jtgnoSaPpdRaZdVhDWFjFqeBLH6-PU",
+  authDomain: "libreta-finanzas-1fbc9.firebaseapp.com",
+  projectId: "libreta-finanzas-1fbc9",
+  storageBucket: "libreta-finanzas-1fbc9.firebasestorage.app",
+  messagingSenderId: "148670319997",
+  appId: "1:148670319997:web:1d450b0976c2c5f1485014",
+  measurementId: "G-TKNS16BMD0"
+};
+
+const isConfigured = firebaseConfig.apiKey && firebaseConfig.apiKey !== 'TU_API_KEY';
+
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => new Intl.NumberFormat('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2}).format(n) + ' €';
+
+let transactions = [];
+let cards = [];
+let editingId = null;
+let currentType = 'gasto';
+let currentMethod = 'efectivo';
+let activeFilter = 'all';
+let activeView = 'movimientos';
+let authMode = 'login';
+let currentUser = null;
+const collapsedMonths = new Set();
+
+let auth, db;
+
+if(!isConfigured){
+  $('setupScreen').classList.remove('hidden');
+} else {
+  firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+  db = firebase.firestore();
+
+  auth.onAuthStateChanged(async (user) => {
+    if(user){
+      currentUser = user;
+      $('authScreen').classList.add('hidden');
+      $('appRoot').classList.remove('hidden');
+      $('userEmail').textContent = user.email;
+      await loadData();
+    } else {
+      currentUser = null;
+      $('appRoot').classList.add('hidden');
+      $('authScreen').classList.remove('hidden');
+    }
+  });
+}
+
+/* ---------------- Auth ---------------- */
+function setAuthMode(mode){
+  authMode = mode;
+  $('authError').classList.remove('show');
+  if(mode === 'login'){
+    $('authTitle').textContent = 'Inicia sesión';
+    $('authSub').textContent = 'Accede con tu cuenta para ver tus finanzas en cualquier dispositivo.';
+    $('authSubmitBtn').textContent = 'Entrar';
+    $('authSwitch').innerHTML = '¿Primera vez? <a id="authToggle">Crea tu cuenta</a>';
+  } else {
+    $('authTitle').textContent = 'Crea tu cuenta';
+    $('authSub').textContent = 'Esta cuenta es solo tuya: úsala luego para entrar desde cualquier dispositivo.';
+    $('authSubmitBtn').textContent = 'Crear cuenta';
+    $('authSwitch').innerHTML = '¿Ya tienes cuenta? <a id="authToggle">Inicia sesión</a>';
+  }
+  $('authToggle').addEventListener('click', () => setAuthMode(mode === 'login' ? 'signup' : 'login'));
+}
+
+function authErrorMessage(code){
+  const map = {
+    'auth/invalid-email': 'El correo no es válido.',
+    'auth/user-not-found': 'No existe ninguna cuenta con ese correo.',
+    'auth/wrong-password': 'Contraseña incorrecta.',
+    'auth/invalid-credential': 'Correo o contraseña incorrectos.',
+    'auth/email-already-in-use': 'Ya existe una cuenta con ese correo. Inicia sesión.',
+    'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
+  };
+  return map[code] || 'Ha ocurrido un error. Inténtalo de nuevo.';
+}
+
+async function handleAuthSubmit(){
+  const email = $('authEmail').value.trim();
+  const password = $('authPassword').value;
+  const errBox = $('authError');
+  errBox.classList.remove('show');
+  if(!email || !password){
+    errBox.textContent = 'Introduce correo y contraseña.';
+    errBox.classList.add('show');
+    return;
+  }
+  try{
+    if(authMode === 'login'){
+      await auth.signInWithEmailAndPassword(email, password);
+    } else {
+      await auth.createUserWithEmailAndPassword(email, password);
+    }
+  }catch(e){
+    errBox.textContent = authErrorMessage(e.code);
+    errBox.classList.add('show');
+  }
+}
+
+if(isConfigured){
+  setAuthMode('login');
+  $('authSubmitBtn').addEventListener('click', handleAuthSubmit);
+  $('authPassword').addEventListener('keydown', (e) => { if(e.key === 'Enter') handleAuthSubmit(); });
+  $('logoutBtn').addEventListener('click', () => auth.signOut());
+}
+
+/* ---------------- Data (Firestore) ---------------- */
+async function loadData(){
+  try{
+    const doc = await db.collection('users').doc(currentUser.uid).get();
+    if(doc.exists){
+      const data = doc.data();
+      transactions = data.transactions || [];
+      cards = data.cards || [];
+    } else {
+      transactions = [];
+      cards = [];
+    }
+  }catch(e){
+    showToast('No se pudieron cargar tus datos.');
+    transactions = [];
+    cards = [];
+  }
+  render();
+}
+
+async function saveData(){
+  try{
+    await db.collection('users').doc(currentUser.uid).set({ transactions, cards }, { merge:false });
+  }catch(e){
+    showToast('Error al guardar los datos.');
+  }
+}
+
+function showToast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=> t.classList.remove('show'), 2400);
+}
+
+/* ---------------- Helpers ---------------- */
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function monthKey(dateStr){ return dateStr.slice(0,7); }
+function monthLabel(key){ const [y,m] = key.split('-'); return `${MESES[parseInt(m,10)-1]} ${y}`; }
+function monthShortLabel(key){ const [y,m] = key.split('-'); return `${MESES[parseInt(m,10)-1].slice(0,3)} ${y.slice(2)}`; }
+function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
+function groupByMonth(){
+  const groups = {};
+  for(const tx of transactions){
+    const k = monthKey(tx.date);
+    if(!groups[k]) groups[k] = [];
+    groups[k].push(tx);
+  }
+  return groups;
+}
+function computeTotals(list){
+  let income = 0, expense = 0;
+  for(const tx of list){
+    if(tx.type === 'ingreso') income += tx.amount; else expense += tx.amount;
+  }
+  return { income, expense, benefit: income - expense };
+}
+
+/* ---------------- Render ---------------- */
+function render(){
+  renderHero();
+  renderHistoryChart();
+  renderHistorialCards();
+  renderMonths();
+  renderCardsTab();
+}
+
+function renderHero(){
+  const totals = computeTotals(transactions);
+  const saved = totals.benefit;
+  const amountEl = $('heroAmount');
+  amountEl.textContent = (saved >= 0 ? '' : '−') + fmt(Math.abs(saved));
+  amountEl.classList.toggle('neg', saved < 0);
+  $('heroIncome').textContent = fmt(totals.income);
+  $('heroExpense').textContent = fmt(totals.expense);
+  renderSparkline();
+}
+
+function renderSparkline(){
+  const groups = groupByMonth();
+  const keys = Object.keys(groups).sort();
+  const svg = $('sparkline');
+  if(keys.length < 2){ svg.innerHTML = ''; return; }
+  let cumulative = 0;
+  const points = keys.map(k => { cumulative += computeTotals(groups[k]).benefit; return cumulative; });
+  const min = Math.min(...points, 0);
+  const max = Math.max(...points, 0);
+  const range = (max - min) || 1;
+  const w = 220, h = 70, pad = 6;
+  const stepX = (w - pad*2) / (points.length - 1);
+  const coords = points.map((v, i) => [pad + i*stepX, h - pad - ((v - min) / range) * (h - pad*2)]);
+  const pathD = coords.map((c,i)=> (i===0? 'M':'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1)).join(' ');
+  const areaD = pathD + ` L${coords[coords.length-1][0].toFixed(1)},${h} L${coords[0][0].toFixed(1)},${h} Z`;
+  svg.innerHTML = `
+    <defs><linearGradient id="sgrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c9824f" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#c9824f" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${areaD}" fill="url(#sgrad)" stroke="none"/>
+    <path d="${pathD}" fill="none" stroke="#c9824f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${coords[coords.length-1][0]}" cy="${coords[coords.length-1][1]}" r="3" fill="#e0a878"/>`;
+}
+
+function renderHistoryChart(){
+  const svg = $('historyChart');
+  const groups = groupByMonth();
+  const keys = Object.keys(groups).sort();
+  if(keys.length === 0){
+    svg.setAttribute('viewBox','0 0 300 140'); svg.setAttribute('width','100%'); svg.setAttribute('height','140');
+    svg.innerHTML = `<text x="150" y="72" text-anchor="middle" fill="#8b96a3" font-size="12" font-family="IBM Plex Sans">Aún no hay datos suficientes.</text>`;
+    return;
+  }
+  const monthTotals = keys.map(k => ({ key:k, ...computeTotals(groups[k]) }));
+  const maxVal = Math.max(...monthTotals.map(m => Math.max(m.income, m.expense)), 1);
+  const colW = 64, chartH = 140, barAreaH = 96, barW = 16, gapBetween = 6;
+  const w = Math.max(colW * monthTotals.length, 300);
+  svg.setAttribute('viewBox', `0 0 ${w} ${chartH}`); svg.setAttribute('width', w); svg.setAttribute('height', chartH);
+  let bars = '';
+  monthTotals.forEach((m, i) => {
+    const cx = i * colW + colW / 2;
+    const expH = (m.expense / maxVal) * barAreaH;
+    const incH = (m.income / maxVal) * barAreaH;
+    const baseY = barAreaH + 14;
+    const incX = cx - gapBetween/2 - barW;
+    const expX = cx + gapBetween/2;
+    bars += `
+      <rect x="${incX}" y="${baseY - incH}" width="${barW}" height="${Math.max(incH,1)}" rx="3" fill="#6fa98b"/>
+      <rect x="${expX}" y="${baseY - expH}" width="${barW}" height="${Math.max(expH,1)}" rx="3" fill="#c96f6f"/>
+      <text x="${cx}" y="${chartH - 4}" text-anchor="middle" font-size="10.5" font-family="IBM Plex Mono" fill="#8b96a3">${monthShortLabel(m.key)}</text>`;
+  });
+  svg.innerHTML = bars;
+}
+
+function renderHistorialCards(){
+  const container = $('historialCards');
+  const groups = groupByMonth();
+  const keys = Object.keys(groups).sort();
+  if(keys.length === 0){
+    container.innerHTML = `<div class="empty" style="grid-column:1/-1;"><h3>Todavía no hay historial</h3><p>En cuanto añadas movimientos, aquí verás el resumen de cada mes.</p></div>`;
+    return;
+  }
+  let cumulative = 0;
+  const rows = keys.map((k, i) => {
+    const list = groups[k];
+    const totals = computeTotals(list);
+    cumulative += totals.benefit;
+    const prev = i > 0 ? computeTotals(groups[keys[i-1]]) : null;
+    const topExpense = list.filter(t => t.type === 'gasto').sort((a,b)=> b.amount - a.amount)[0];
+    return { key:k, totals, cumulative, prev, topExpense, count:list.length };
+  }).reverse();
+
+  container.innerHTML = rows.map(r => {
+    const { totals } = r;
+    let trendHtml = `<span class="hist-trend flat">Primer mes</span>`;
+    if(r.prev){
+      const diff = totals.benefit - r.prev.benefit;
+      if(Math.abs(r.prev.benefit) > 0.009){
+        const pct = Math.round((diff / Math.abs(r.prev.benefit)) * 100);
+        const dir = diff > 0.005 ? 'up' : diff < -0.005 ? 'down' : 'flat';
+        const arrow = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '—';
+        trendHtml = `<span class="hist-trend ${dir}">${arrow} ${Math.abs(pct)}% vs mes anterior</span>`;
+      } else {
+        trendHtml = `<span class="hist-trend flat">— vs mes anterior</span>`;
+      }
+    }
+    const ratio = totals.income > 0 ? Math.min(100, Math.max(0, (1 - totals.expense / totals.income) * 100)) : 0;
+    return `
+      <div class="hist-card">
+        <div class="hist-card-head"><div class="hist-month">${monthLabel(r.key)}</div>${trendHtml}</div>
+        <div class="hist-stats">
+          <div class="hist-stat saved"><div class="lbl">Ahorrado</div><div class="val">${totals.benefit>=0?'':'−'}${fmt(Math.abs(totals.benefit))}</div></div>
+          <div class="hist-stat income"><div class="lbl">Ingresado</div><div class="val">${fmt(totals.income)}</div></div>
+          <div class="hist-stat expense"><div class="lbl">Gasto</div><div class="val">${fmt(totals.expense)}</div></div>
+        </div>
+        <div class="hist-bar"><div class="hist-bar-fill" style="width:${ratio}%"></div></div>
+        <div class="hist-foot"><span>Ahorro acumulado: <span class="amt">${fmt(r.cumulative)}</span></span><span>${r.count} mov.</span></div>
+        ${r.topExpense ? `<div class="hist-foot" style="border-top:none; padding-top:6px;"><span>Mayor gasto</span><span class="top-expense">${escapeHtml(r.topExpense.description)} · <span class="amt">${fmt(r.topExpense.amount)}</span></span></div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function renderMonths(){
+  const main = $('main');
+  if(transactions.length === 0){
+    main.innerHTML = `<div class="empty">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="6" y="10" width="36" height="30" rx="4" stroke="#8b96a3" stroke-width="2"/>
+          <path d="M6 18H42" stroke="#8b96a3" stroke-width="2"/>
+          <path d="M14 28H24" stroke="#8b96a3" stroke-width="2"/>
+        </svg>
+        <h3>Tu libreta está vacía</h3><p>Añade tu primer ingreso o gasto para empezar a llevar la cuenta.</p></div>`;
+    return;
+  }
+  const groups = groupByMonth();
+  const keys = Object.keys(groups).sort().reverse();
+  const visibleBlocks = keys.filter(k => activeFilter === 'all' || groups[k].some(tx => tx.type === activeFilter));
+
+  if(visibleBlocks.length === 0){
+    main.innerHTML = `<div class="empty"><h3>Sin movimientos</h3><p>No hay ${activeFilter === 'gasto' ? 'gastos' : 'ingresos'} registrados todavía.</p></div>`;
+    return;
+  }
+
+  main.innerHTML = visibleBlocks.map(k => {
+    const fullList = groups[k].slice().sort((a,b)=> b.date.localeCompare(a.date));
+    const list = activeFilter === 'all' ? fullList : fullList.filter(tx => tx.type === activeFilter);
+    const totals = computeTotals(fullList);
+    const isCollapsed = collapsedMonths.has(k);
+    return `
+      <div class="month-block ${isCollapsed ? 'collapsed':''}" data-key="${k}">
+        <div class="month-head" data-toggle="${k}">
+          <div class="month-title">${monthLabel(k)}</div>
+          <div class="month-figures">
+            <span class="chip income">+${fmt(totals.income)}</span>
+            <span class="chip expense">−${fmt(totals.expense)}</span>
+            <span class="chip benefit">${totals.benefit>=0?'':'−'}${fmt(Math.abs(totals.benefit))}</span>
+            <span class="caret">▾</span>
+          </div>
+        </div>
+        <div class="tx-list">
+          ${list.map(tx => `
+            <div class="tx-row" data-id="${tx.id}">
+              <div class="tx-date mono">${tx.date.slice(8,10)}/${tx.date.slice(5,7)}</div>
+              <div class="tx-desc">
+                <div>${escapeHtml(tx.description)}</div>
+                <div class="tx-desc-sub">${tx.method === 'tarjeta' ? '💳 ' + escapeHtml(tx.cardName || 'Tarjeta') : '💶 Efectivo'}</div>
+              </div>
+              <div class="tx-amount mono ${tx.type}">${tx.type==='ingreso'?'+':'−'}${fmt(tx.amount)}</div>
+              <div class="tx-edit">editar</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }).join('');
+
+  main.querySelectorAll('[data-toggle]').forEach(el => {
+    el.addEventListener('click', () => {
+      const k = el.getAttribute('data-toggle');
+      if(collapsedMonths.has(k)) collapsedMonths.delete(k); else collapsedMonths.add(k);
+      renderMonths();
+    });
+  });
+  main.querySelectorAll('.tx-row').forEach(el => {
+    el.addEventListener('click', () => openModal(el.getAttribute('data-id')));
+  });
+}
+
+function renderCardsTab(){
+  const list = $('cardsList');
+  if(cards.length === 0){
+    list.innerHTML = `<div class="cards-empty">Aún no has guardado ninguna tarjeta.<br>Añade la primera arriba.</div>`;
+    return;
+  }
+  list.innerHTML = cards.map(name => `
+    <div class="card-item">
+      <div class="card-item-name"><span class="dot"></span>${escapeHtml(name)}</div>
+      <button class="card-remove" data-card="${escapeHtml(name)}">Eliminar</button>
+    </div>`).join('');
+  list.querySelectorAll('.card-remove').forEach(btn => {
+    btn.addEventListener('click', () => removeCard(btn.getAttribute('data-card')));
+  });
+}
+
+/* ---------------- Cards management ---------------- */
+async function addCard(){
+  const input = $('newCardInput');
+  const name = input.value.trim();
+  if(!name){ showToast('Escribe un nombre para la tarjeta.'); return; }
+  if(cards.includes(name)){ showToast('Esa tarjeta ya existe.'); return; }
+  cards.push(name);
+  input.value = '';
+  await saveData();
+  renderCardsTab();
+  showToast('Tarjeta añadida.');
+}
+
+async function removeCard(name){
+  const inUse = transactions.some(t => t.method === 'tarjeta' && t.cardName === name);
+  if(inUse && !confirm(`"${name}" tiene movimientos asociados. ¿Eliminarla igualmente? (los movimientos ya guardados no se borran)`)) return;
+  cards = cards.filter(c => c !== name);
+  await saveData();
+  renderCardsTab();
+  showToast('Tarjeta eliminada.');
+}
+
+/* ---------------- Modal (add/edit movement) ---------------- */
+function setType(type){
+  currentType = type;
+  $('typeGasto').classList.toggle('active', type === 'gasto');
+  $('typeIngreso').classList.toggle('active', type === 'ingreso');
+}
+function setMethod(method){
+  currentMethod = method;
+  $('methodEfectivo').classList.toggle('active', method === 'efectivo');
+  $('methodTarjeta').classList.toggle('active', method === 'tarjeta');
+  $('cardSelectField').style.display = method === 'tarjeta' ? 'block' : 'none';
+  if(method === 'tarjeta') populateCardSelect();
+}
+function populateCardSelect(selected){
+  const sel = $('fCardSelect');
+  if(cards.length === 0){
+    sel.innerHTML = `<option value="">— No tienes tarjetas guardadas —</option>`;
+    return;
+  }
+  sel.innerHTML = cards.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if(selected && cards.includes(selected)) sel.value = selected;
+}
+
+function openModal(id){
+  editingId = id || null;
+  if(id){
+    const tx = transactions.find(t => t.id === id);
+    $('modalTitle').textContent = 'Editar movimiento';
+    setType(tx.type);
+    setMethod(tx.method || 'efectivo');
+    populateCardSelect(tx.cardName);
+    $('fAmount').value = tx.amount;
+    $('fDesc').value = tx.description;
+    $('fDate').value = tx.date;
+    $('deleteBtn').style.display = 'inline-block';
+  } else {
+    $('modalTitle').textContent = 'Nuevo movimiento';
+    setType('gasto');
+    setMethod('efectivo');
+    populateCardSelect();
+    $('fAmount').value = '';
+    $('fDesc').value = '';
+    $('fDate').value = todayStr();
+    $('deleteBtn').style.display = 'none';
+  }
+  $('overlay').classList.add('open');
+  setTimeout(()=> $('fAmount').focus(), 100);
+}
+function closeModal(){ $('overlay').classList.remove('open'); editingId = null; }
+
+async function handleSave(){
+  const amount = parseFloat($('fAmount').value);
+  const description = $('fDesc').value.trim();
+  const date = $('fDate').value;
+  const cardName = currentMethod === 'tarjeta' ? $('fCardSelect').value : '';
+
+  if(isNaN(amount) || amount <= 0){ showToast('Introduce una cantidad válida.'); return; }
+  if(!description){ showToast('Añade una descripción.'); return; }
+  if(!date){ showToast('Selecciona una fecha.'); return; }
+  if(currentMethod === 'tarjeta' && !cardName){ showToast('Selecciona o añade una tarjeta primero.'); return; }
+
+  if(editingId){
+    const tx = transactions.find(t => t.id === editingId);
+    tx.amount = amount; tx.description = description; tx.date = date; tx.type = currentType;
+    tx.method = currentMethod; tx.cardName = cardName;
+  } else {
+    transactions.push({
+      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
+      amount, description, date, type: currentType, method: currentMethod, cardName
+    });
+  }
+  await saveData();
+  closeModal();
+  render();
+  showToast('Guardado.');
+}
+
+async function handleDelete(){
+  if(!editingId) return;
+  transactions = transactions.filter(t => t.id !== editingId);
+  await saveData();
+  closeModal();
+  render();
+  showToast('Movimiento eliminado.');
+}
+
+function exportCSV(){
+  if(transactions.length === 0){ showToast('No hay movimientos para exportar.'); return; }
+  const rows = [['Fecha','Tipo','Descripción','Cantidad','Método','Tarjeta']];
+  transactions.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(tx => {
+    rows.push([tx.date, tx.type, tx.description, tx.amount.toFixed(2), tx.method || 'efectivo', tx.cardName || '']);
+  });
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'libreta-finanzas.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ---------------- Event listeners ---------------- */
+$('addBtn').addEventListener('click', () => openModal(null));
+$('fabBtn').addEventListener('click', () => openModal(null));
+$('cancelBtn').addEventListener('click', closeModal);
+$('overlay').addEventListener('click', (e) => { if(e.target.id === 'overlay') closeModal(); });
+$('saveBtn').addEventListener('click', handleSave);
+$('deleteBtn').addEventListener('click', handleDelete);
+$('typeGasto').addEventListener('click', () => setType('gasto'));
+$('typeIngreso').addEventListener('click', () => setType('ingreso'));
+$('methodEfectivo').addEventListener('click', () => setMethod('efectivo'));
+$('methodTarjeta').addEventListener('click', () => setMethod('tarjeta'));
+$('exportBtn').addEventListener('click', exportCSV);
+$('addCardBtn').addEventListener('click', addCard);
+$('newCardInput').addEventListener('keydown', (e) => { if(e.key === 'Enter') addCard(); });
+$('goToCardsLink').addEventListener('click', () => { closeModal(); switchView('tarjetas'); });
+
+$('filterTabs').querySelectorAll('.filter-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeFilter = btn.getAttribute('data-filter');
+    $('filterTabs').querySelectorAll('.filter-tab').forEach(b => b.classList.toggle('active', b === btn));
+    renderMonths();
+  });
+});
+
+function switchView(view){
+  activeView = view;
+  $('navTabs').querySelectorAll('.nav-tab').forEach(b => b.classList.toggle('active', b.getAttribute('data-view') === view));
+  $('viewMovimientos').classList.toggle('hidden', view !== 'movimientos');
+  $('viewHistorial').classList.toggle('hidden', view !== 'historial');
+  $('viewTarjetas').classList.toggle('hidden', view !== 'tarjetas');
+  $('fabBtn').style.display = view === 'movimientos' ? '' : 'none';
+}
+$('navTabs').querySelectorAll('.nav-tab').forEach(btn => {
+  btn.addEventListener('click', () => switchView(btn.getAttribute('data-view')));
+});
+</script>
+</body>
+</html>
