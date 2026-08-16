@@ -601,7 +601,7 @@ function authErrorMessage(code){
     'auth/account-exists-with-different-credential': 'Ya existe una cuenta con ese correo usando otro método de acceso.',
     'auth/popup-blocked': 'El navegador bloqueó la ventana emergente. Permite pop-ups para este sitio e inténtalo de nuevo.',
   };
-  return map[code] || 'Ha ocurrido un error. Inténtalo de nuevo.';
+  return map[code] || `Ha ocurrido un error (${code || 'desconocido'}). Inténtalo de nuevo.`;
 }
 
 async function handleAuthSubmit(){
