@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Libreta — Control de finanzas</title>
 
+<!-- PWA: hace que la app se pueda "instalar" en móvil y PC -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#151b24">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Libreta">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -256,6 +266,15 @@ main{ max-width:960px; margin:14px auto 24px; padding:0 20px; }
 .auth-switch a{ color:var(--accent-soft); cursor:pointer; text-decoration:underline; }
 .auth-card .btn-primary{ width:100%; justify-content:center; padding:12px; margin-top:4px; }
 
+.btn-google{
+  width:100%; justify-content:center; padding:11px; display:flex; align-items:center; gap:10px;
+  background:#fff; color:#1f1f1f; font-weight:600; font-size:14px; border:1px solid var(--border);
+}
+.btn-google:hover{ background:#f3f3f3; }
+.btn-google svg{ width:18px; height:18px; }
+.auth-divider{ display:flex; align-items:center; gap:10px; margin:18px 0; color:var(--text-dim); font-size:12px; text-transform:uppercase; letter-spacing:0.06em; }
+.auth-divider::before, .auth-divider::after{ content:""; flex:1; height:1px; background:var(--border); }
+
 .setup-card{ width:100%; max-width:560px; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:30px; }
 .setup-card h2{ font-family:'Fraunces', serif; font-size:20px; margin-bottom:10px; }
 .setup-card p{ font-size:14px; color:var(--text-dim); line-height:1.6; margin-bottom:14px; }
@@ -275,7 +294,7 @@ main{ max-width:960px; margin:14px auto 24px; padding:0 20px; }
     <p>Para usar esta app fuera de Claude, en cualquier dispositivo, con tus propios datos privados y sincronizados, necesita conectarse a una base de datos gratuita tuya (Firebase de Google). Son 5 minutos, una sola vez.</p>
     <ol>
       <li>Entra en <code>console.firebase.google.com</code> y crea un proyecto nuevo (gratis).</li>
-      <li>En el menú del proyecto, ve a <code>Compilación → Authentication</code>, pulsa "Comenzar" y activa el proveedor <code>Correo electrónico/contraseña</code>.</li>
+      <li>En el menú del proyecto, ve a <code>Compilación → Authentication</code>, pulsa "Comenzar" y activa el proveedor <code>Correo electrónico/contraseña</code>. Activa también el proveedor <code>Google</code> desde la misma pantalla.</li>
       <li>Ve a <code>Compilación → Firestore Database</code>, crea la base de datos (modo producción) y en "Reglas" pega esto y publica:
         <pre>rules_version = '2';
 service cloud.firestore {
@@ -301,6 +320,13 @@ service cloud.firestore {
     <h2 id="authTitle">Inicia sesión</h2>
     <p class="sub" id="authSub">Accede con tu cuenta para ver tus finanzas en cualquier dispositivo.</p>
     <div class="auth-error" id="authError"></div>
+
+    <button class="btn-primary btn-google" id="googleSignInBtn" type="button">
+      <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12s5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24s8.955,20,20,20s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
+      Continuar con Google
+    </button>
+    <div class="auth-divider">o con tu correo</div>
+
     <div class="field">
       <label for="authEmail">Correo electrónico</label>
       <input type="email" id="authEmail" placeholder="tucorreo@ejemplo.com">
@@ -472,7 +498,7 @@ let authMode = 'login';
 let currentUser = null;
 const collapsedMonths = new Set();
 
-let auth, db;
+let auth, db, googleProvider;
 
 if(!isConfigured){
   $('setupScreen').classList.remove('hidden');
@@ -480,6 +506,7 @@ if(!isConfigured){
   firebase.initializeApp(firebaseConfig);
   auth = firebase.auth();
   db = firebase.firestore();
+  googleProvider = new firebase.auth.GoogleAuthProvider();
 
   auth.onAuthStateChanged(async (user) => {
     if(user){
@@ -522,6 +549,9 @@ function authErrorMessage(code){
     'auth/invalid-credential': 'Correo o contraseña incorrectos.',
     'auth/email-already-in-use': 'Ya existe una cuenta con ese correo. Inicia sesión.',
     'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
+    'auth/popup-closed-by-user': 'Has cerrado la ventana de Google antes de terminar.',
+    'auth/account-exists-with-different-credential': 'Ya existe una cuenta con ese correo usando otro método de acceso.',
+    'auth/popup-blocked': 'El navegador bloqueó la ventana emergente. Permite pop-ups para este sitio e inténtalo de nuevo.',
   };
   return map[code] || 'Ha ocurrido un error. Inténtalo de nuevo.';
 }
@@ -548,10 +578,22 @@ async function handleAuthSubmit(){
   }
 }
 
+async function handleGoogleSignIn(){
+  const errBox = $('authError');
+  errBox.classList.remove('show');
+  try{
+    await auth.signInWithPopup(googleProvider);
+  }catch(e){
+    errBox.textContent = authErrorMessage(e.code);
+    errBox.classList.add('show');
+  }
+}
+
 if(isConfigured){
   setAuthMode('login');
   $('authSubmitBtn').addEventListener('click', handleAuthSubmit);
   $('authPassword').addEventListener('keydown', (e) => { if(e.key === 'Enter') handleAuthSubmit(); });
+  $('googleSignInBtn').addEventListener('click', handleGoogleSignIn);
   $('logoutBtn').addEventListener('click', () => auth.signOut());
 }
 
@@ -975,6 +1017,13 @@ function switchView(view){
 $('navTabs').querySelectorAll('.nav-tab').forEach(btn => {
   btn.addEventListener('click', () => switchView(btn.getAttribute('data-view')));
 });
+
+/* ---------------- PWA: registrar service worker (instalable en móvil/PC) ---------------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
 </script>
 </body>
   <!-- activar GitHub Pages -->
