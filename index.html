@@ -336,8 +336,25 @@ service cloud.firestore {
       <label for="authPassword">Contraseña</label>
       <input type="password" id="authPassword" placeholder="••••••••">
     </div>
+    <div class="field" id="confirmPasswordField" style="display:none;">
+      <label for="authPasswordConfirm">Repite la contraseña</label>
+      <input type="password" id="authPasswordConfirm" placeholder="••••••••">
+    </div>
     <button class="btn-primary" id="authSubmitBtn">Entrar</button>
     <div class="auth-switch" id="authSwitch">¿Primera vez? <a id="authToggle">Crea tu cuenta</a></div>
+  </div>
+</div>
+
+<!-- ============ VERIFY EMAIL SCREEN ============ -->
+<div class="center-screen hidden" id="verifyScreen">
+  <div class="auth-card">
+    <div class="brand"><span class="mark"></span><h1>Libreta</h1></div>
+    <h2>Verifica tu correo</h2>
+    <p class="sub">Te hemos enviado un enlace de verificación a <b id="verifyEmailText" style="color:var(--text);"></b>. Ábrelo desde tu correo y luego pulsa "Ya verifiqué mi correo".</p>
+    <div class="auth-error" id="verifyError"></div>
+    <button class="btn-primary" id="verifyCheckBtn">Ya verifiqué mi correo</button>
+    <button class="btn-ghost" id="verifyResendBtn" style="width:100%; justify-content:center; padding:11px; margin-top:10px;">Reenviar correo de verificación</button>
+    <div class="auth-switch"><a id="verifyLogoutLink">Cerrar sesión</a></div>
   </div>
 </div>
 
@@ -522,16 +539,34 @@ if(!isConfigured){
 
   auth.onAuthStateChanged(async (user) => {
     if(user){
+      const isGoogleUser = user.providerData.some(p => p.providerId === 'google.com');
+      if(!isGoogleUser && !user.emailVerified){
+        currentUser = user;
+        $('authScreen').classList.add('hidden');
+        $('appRoot').classList.add('hidden');
+        $('verifyScreen').classList.remove('hidden');
+        $('verifyEmailText').textContent = user.email;
+        return;
+      }
       currentUser = user;
       $('authScreen').classList.add('hidden');
+      $('verifyScreen').classList.add('hidden');
       $('appRoot').classList.remove('hidden');
       $('userEmail').textContent = user.email;
       await loadData();
     } else {
       currentUser = null;
       $('appRoot').classList.add('hidden');
+      $('verifyScreen').classList.add('hidden');
       $('authScreen').classList.remove('hidden');
     }
+  });
+
+  // Resultado de signInWithRedirect (Google)
+  auth.getRedirectResult().catch((e) => {
+    const errBox = $('authError');
+    errBox.textContent = authErrorMessage(e.code);
+    errBox.classList.add('show');
   });
 }
 
@@ -539,6 +574,7 @@ if(!isConfigured){
 function setAuthMode(mode){
   authMode = mode;
   $('authError').classList.remove('show');
+  $('confirmPasswordField').style.display = mode === 'signup' ? 'block' : 'none';
   if(mode === 'login'){
     $('authTitle').textContent = 'Inicia sesión';
     $('authSub').textContent = 'Accede con tu cuenta para ver tus finanzas en cualquier dispositivo.';
@@ -571,6 +607,7 @@ function authErrorMessage(code){
 async function handleAuthSubmit(){
   const email = $('authEmail').value.trim();
   const password = $('authPassword').value;
+  const passwordConfirm = $('authPasswordConfirm').value;
   const errBox = $('authError');
   errBox.classList.remove('show');
   if(!email || !password){
@@ -578,14 +615,52 @@ async function handleAuthSubmit(){
     errBox.classList.add('show');
     return;
   }
+  if(authMode === 'signup' && password !== passwordConfirm){
+    errBox.textContent = 'Las contraseñas no coinciden.';
+    errBox.classList.add('show');
+    return;
+  }
   try{
     if(authMode === 'login'){
       await auth.signInWithEmailAndPassword(email, password);
     } else {
-      await auth.createUserWithEmailAndPassword(email, password);
+      const cred = await auth.createUserWithEmailAndPassword(email, password);
+      await cred.user.sendEmailVerification();
     }
   }catch(e){
     errBox.textContent = authErrorMessage(e.code);
+    errBox.classList.add('show');
+  }
+}
+
+async function handleVerifyCheck(){
+  const errBox = $('verifyError');
+  errBox.classList.remove('show');
+  try{
+    await currentUser.reload();
+    if(currentUser.emailVerified){
+      $('verifyScreen').classList.add('hidden');
+      $('appRoot').classList.remove('hidden');
+      $('userEmail').textContent = currentUser.email;
+      await loadData();
+    } else {
+      errBox.textContent = 'Todavía no hemos detectado la verificación. Revisa tu correo (y la carpeta de spam) y vuelve a intentarlo.';
+      errBox.classList.add('show');
+    }
+  }catch(e){
+    errBox.textContent = 'No se pudo comprobar el estado. Inténtalo de nuevo.';
+    errBox.classList.add('show');
+  }
+}
+
+async function handleVerifyResend(){
+  const errBox = $('verifyError');
+  errBox.classList.remove('show');
+  try{
+    await currentUser.sendEmailVerification();
+    showToast('Correo de verificación reenviado.');
+  }catch(e){
+    errBox.textContent = 'No se pudo reenviar el correo. Espera un momento e inténtalo de nuevo.';
     errBox.classList.add('show');
   }
 }
@@ -594,7 +669,7 @@ async function handleGoogleSignIn(){
   const errBox = $('authError');
   errBox.classList.remove('show');
   try{
-    await auth.signInWithPopup(googleProvider);
+    await auth.signInWithRedirect(googleProvider);
   }catch(e){
     errBox.textContent = authErrorMessage(e.code);
     errBox.classList.add('show');
@@ -605,8 +680,12 @@ if(isConfigured){
   setAuthMode('login');
   $('authSubmitBtn').addEventListener('click', handleAuthSubmit);
   $('authPassword').addEventListener('keydown', (e) => { if(e.key === 'Enter') handleAuthSubmit(); });
+  $('authPasswordConfirm').addEventListener('keydown', (e) => { if(e.key === 'Enter') handleAuthSubmit(); });
   $('googleSignInBtn').addEventListener('click', handleGoogleSignIn);
   $('logoutBtn').addEventListener('click', () => auth.signOut());
+  $('verifyCheckBtn').addEventListener('click', handleVerifyCheck);
+  $('verifyResendBtn').addEventListener('click', handleVerifyResend);
+  $('verifyLogoutLink').addEventListener('click', () => auth.signOut());
 }
 
 /* ---------------- Data (Firestore) ---------------- */
