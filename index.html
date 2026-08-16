@@ -561,13 +561,6 @@ if(!isConfigured){
       $('authScreen').classList.remove('hidden');
     }
   });
-
-  // Resultado de signInWithRedirect (Google)
-  auth.getRedirectResult().catch((e) => {
-    const errBox = $('authError');
-    errBox.textContent = authErrorMessage(e.code);
-    errBox.classList.add('show');
-  });
 }
 
 /* ---------------- Auth ---------------- */
@@ -669,7 +662,7 @@ async function handleGoogleSignIn(){
   const errBox = $('authError');
   errBox.classList.remove('show');
   try{
-    await auth.signInWithRedirect(googleProvider);
+    await auth.signInWithPopup(googleProvider);
   }catch(e){
     errBox.textContent = authErrorMessage(e.code);
     errBox.classList.add('show');
