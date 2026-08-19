@@ -211,6 +211,29 @@ main{ max-width:960px; margin:14px auto 24px; padding:0 20px; }
 .card-remove:hover{ color:var(--expense); }
 .cards-empty{ color:var(--text-dim); font-size:13.5px; text-align:center; padding:30px 0; }
 
+/* ---------- Grupos (categorías) ---------- */
+.group-tag{ display:inline-block; font-family:'IBM Plex Mono', monospace; font-size:10.5px; padding:2px 8px; border-radius:20px; background:var(--surface-2); color:var(--accent-soft); border:1px solid var(--border); margin-left:6px; }
+.group-select-row{ max-width:960px; margin:10px auto 0; padding:0 20px; }
+.group-select-row select{ background:var(--surface); border:1px solid var(--border); color:var(--text-dim); font-size:13px; padding:8px 12px; border-radius:20px; }
+
+/* ---------- Recurrentes tab ---------- */
+.recurring-wrap{ max-width:640px; margin:0 auto; padding:0 20px 24px; }
+.recurring-form{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px; margin-bottom:20px; }
+.recurring-form h3{ font-family:'Fraunces', serif; font-size:16px; margin-bottom:14px; }
+.recurring-item{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:10px; }
+.recurring-item.paused{ opacity:0.55; }
+.recurring-item-top{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; }
+.recurring-item-name{ font-size:14.5px; font-weight:600; }
+.recurring-item-amount{ font-family:'IBM Plex Mono', monospace; font-weight:600; }
+.recurring-item-amount.ingreso{ color:var(--income); }
+.recurring-item-amount.gasto{ color:var(--expense); }
+.recurring-item-meta{ font-size:12px; color:var(--text-dim); font-family:'IBM Plex Mono', monospace; }
+.recurring-item-actions{ display:flex; gap:14px; margin-top:10px; }
+.recurring-item-actions button{ background:none; border:none; color:var(--text-dim); font-size:12.5px; text-decoration:underline; padding:0; }
+.recurring-item-actions button:hover{ color:var(--text); }
+.recurring-item-actions button.danger:hover{ color:var(--expense); }
+.recurring-empty{ color:var(--text-dim); font-size:13.5px; text-align:center; padding:30px 0; }
+
 /* ---------- Empty state ---------- */
 .empty{ text-align:center; padding:60px 20px; color:var(--text-dim); }
 .empty svg{ margin-bottom:16px; opacity:0.5; }
@@ -387,7 +410,8 @@ service cloud.firestore {
 <nav class="nav-tabs" id="navTabs">
   <button class="nav-tab active" data-view="movimientos">Movimientos</button>
   <button class="nav-tab" data-view="historial">Historial</button>
-  <button class="nav-tab" data-view="tarjetas">Tarjetas</button>
+  <button class="nav-tab" data-view="recurrentes">Recurrentes</button>
+  <button class="nav-tab" data-view="tarjetas">Tarjetas y grupos</button>
 </nav>
 
 <section id="viewMovimientos" class="view">
@@ -400,6 +424,11 @@ service cloud.firestore {
     <button class="filter-tab active" data-filter="all">Todos</button>
     <button class="filter-tab" data-filter="ingreso">Ingresos</button>
     <button class="filter-tab" data-filter="gasto">Gastos</button>
+  </div>
+  <div class="group-select-row">
+    <select id="groupFilterSelect">
+      <option value="all">Todos los grupos</option>
+    </select>
   </div>
 
   <main id="main">
@@ -425,13 +454,70 @@ service cloud.firestore {
   <div id="historialCards" class="historial-cards"></div>
 </section>
 
+<section id="viewRecurrentes" class="view hidden">
+  <div class="recurring-wrap" style="margin-top:16px;">
+    <div class="recurring-form">
+      <h3 id="recurringFormTitle">Nuevo movimiento recurrente</h3>
+      <div class="type-toggle">
+        <button class="type-btn ingreso" id="rTypeIngreso" type="button">Ingreso</button>
+        <button class="type-btn gasto active" id="rTypeGasto" type="button">Gasto</button>
+      </div>
+      <div class="field">
+        <label for="rAmount">Cantidad (€)</label>
+        <input type="number" id="rAmount" class="mono-input" step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label for="rDesc">Descripción</label>
+        <input type="text" id="rDesc" placeholder="Ej. Nómina, Alquiler, Netflix...">
+      </div>
+      <div class="field">
+        <label for="rDay">Día del mes</label>
+        <select id="rDay"></select>
+        <div class="field-hint">Si el mes tiene menos días, se usará el último día disponible.</div>
+      </div>
+      <div class="field">
+        <label>Método de pago</label>
+        <div class="type-toggle">
+          <button class="method-btn active" id="rMethodEfectivo" type="button">Efectivo</button>
+          <button class="method-btn" id="rMethodTarjeta" type="button">Tarjeta</button>
+        </div>
+      </div>
+      <div class="field" id="rCardSelectField" style="display:none;">
+        <label for="rCardSelect">Tarjeta</label>
+        <select id="rCardSelect"></select>
+      </div>
+      <div class="field">
+        <label for="rGroupSelect">Grupo (opcional)</label>
+        <select id="rGroupSelect"></select>
+        <div class="field-hint">¿Falta uno? <a id="rGoToGroupsLink">Añádelo en Tarjetas y grupos</a></div>
+      </div>
+      <div class="modal-actions" style="margin-top:16px;">
+        <button class="btn-delete hidden" id="rDeleteBtn">Eliminar</button>
+        <button class="btn-primary" id="rSaveBtn">Guardar recurrente</button>
+      </div>
+      <div style="text-align:center; margin-top:10px;">
+        <button class="btn-ghost hidden" id="rCancelEditBtn" style="border:none;">Cancelar edición</button>
+      </div>
+    </div>
+    <div id="recurringList"></div>
+  </div>
+</section>
+
 <section id="viewTarjetas" class="view hidden">
   <div class="cards-wrap" style="margin-top:16px;">
+    <h3 style="font-family:'Fraunces', serif; font-size:16px; margin-bottom:12px;">Tarjetas</h3>
     <div class="card-add-row">
       <input type="text" id="newCardInput" placeholder="Ej. Visa BBVA, Revolut...">
       <button class="btn-primary" id="addCardBtn">Añadir</button>
     </div>
     <div id="cardsList"></div>
+
+    <h3 style="font-family:'Fraunces', serif; font-size:16px; margin:26px 0 12px;">Grupos (categorías)</h3>
+    <div class="card-add-row">
+      <input type="text" id="newGroupInput" placeholder="Ej. Viajes, Comida, Casa...">
+      <button class="btn-primary" id="addGroupBtn">Añadir</button>
+    </div>
+    <div id="groupsList"></div>
   </div>
 </section>
 
@@ -467,6 +553,11 @@ service cloud.firestore {
       <label for="fCardSelect">Tarjeta</label>
       <select id="fCardSelect"></select>
       <div class="field-hint">¿Falta una? <a id="goToCardsLink">Añádela en la pestaña Tarjetas</a></div>
+    </div>
+    <div class="field">
+      <label for="fGroupSelect">Grupo (opcional)</label>
+      <select id="fGroupSelect"></select>
+      <div class="field-hint">¿Falta uno? <a id="goToGroupsLink">Añádelo en la pestaña Tarjetas y grupos</a></div>
     </div>
     <div class="modal-actions">
       <button class="btn-delete" id="deleteBtn" style="display:none;">Eliminar</button>
@@ -518,13 +609,19 @@ const fmt = (n) => new Intl.NumberFormat('es-ES', {minimumFractionDigits:2, maxi
 
 let transactions = [];
 let cards = [];
+let groups = [];
+let recurring = [];
 let editingId = null;
 let currentType = 'gasto';
 let currentMethod = 'efectivo';
 let activeFilter = 'all';
+let activeGroupFilter = 'all';
 let activeView = 'movimientos';
 let authMode = 'login';
 let currentUser = null;
+let rCurrentType = 'gasto';
+let rCurrentMethod = 'efectivo';
+let editingRecurringId = null;
 const collapsedMonths = new Set();
 
 let auth, db, googleProvider;
@@ -689,21 +786,28 @@ async function loadData(){
       const data = doc.data();
       transactions = data.transactions || [];
       cards = data.cards || [];
+      groups = data.groups || [];
+      recurring = data.recurring || [];
     } else {
       transactions = [];
       cards = [];
+      groups = [];
+      recurring = [];
     }
   }catch(e){
     showToast('No se pudieron cargar tus datos.');
     transactions = [];
     cards = [];
+    groups = [];
+    recurring = [];
   }
+  await processRecurring();
   render();
 }
 
 async function saveData(){
   try{
-    await db.collection('users').doc(currentUser.uid).set({ transactions, cards }, { merge:false });
+    await db.collection('users').doc(currentUser.uid).set({ transactions, cards, groups, recurring }, { merge:false });
   }catch(e){
     showToast('Error al guardar los datos.');
   }
@@ -714,6 +818,50 @@ function showToast(msg){
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(()=> t.classList.remove('show'), 2400);
+}
+
+function genId(){ return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(); }
+
+/* ---------------- Recurrentes: generación automática ---------------- */
+function currentMonthKey(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+
+async function processRecurring(){
+  if(!recurring || recurring.length === 0) return;
+  const nowKey = currentMonthKey();
+  const [ny, nm] = nowKey.split('-').map(Number);
+  let changed = false;
+
+  for(const r of recurring){
+    if(r.active === false) continue;
+    if(!r.generated) r.generated = [];
+    if(!r.startMonth) r.startMonth = nowKey;
+    let [cy, cm] = r.startMonth.split('-').map(Number);
+    let guard = 0;
+    while((cy < ny || (cy === ny && cm <= nm)) && guard < 36){
+      const key = `${cy}-${String(cm).padStart(2,'0')}`;
+      if(!r.generated.includes(key)){
+        const dim = new Date(cy, cm, 0).getDate();
+        const day = Math.min(r.day || 1, dim);
+        const dateStr = `${cy}-${String(cm).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        transactions.push({
+          id: genId(),
+          amount: r.amount,
+          description: r.description,
+          date: dateStr,
+          type: r.type,
+          method: r.method,
+          cardName: r.cardName || '',
+          group: r.group || '',
+          recurringId: r.id
+        });
+        r.generated.push(key);
+        changed = true;
+      }
+      cm++; if(cm > 12){ cm = 1; cy++; }
+      guard++;
+    }
+  }
+  if(changed) await saveData();
 }
 
 /* ---------------- Helpers ---------------- */
@@ -745,8 +893,24 @@ function render(){
   renderHero();
   renderHistoryChart();
   renderHistorialCards();
+  renderGroupFilterSelect();
   renderMonths();
   renderCardsTab();
+  renderGroupsTab();
+  renderRecurringTab();
+}
+
+function renderGroupFilterSelect(){
+  const sel = $('groupFilterSelect');
+  const prev = activeGroupFilter;
+  sel.innerHTML = `<option value="all">Todos los grupos</option><option value="__none__">Sin grupo</option>` +
+    groups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+  if(prev === 'all' || prev === '__none__' || groups.includes(prev)){
+    sel.value = prev;
+  } else {
+    activeGroupFilter = 'all';
+    sel.value = 'all';
+  }
 }
 
 function renderHero(){
@@ -883,7 +1047,7 @@ function openMonthOverlay(key){
       <div class="tx-date mono">${tx.date.slice(8,10)}/${tx.date.slice(5,7)}</div>
       <div class="tx-desc">
         <div>${escapeHtml(tx.description)}</div>
-        <div class="tx-desc-sub">${tx.method === 'tarjeta' ? '💳 ' + escapeHtml(tx.cardName || 'Tarjeta') : '💶 Efectivo'}</div>
+        <div class="tx-desc-sub">${tx.method === 'tarjeta' ? '💳 ' + escapeHtml(tx.cardName || 'Tarjeta') : '💶 Efectivo'}${tx.group ? `<span class="group-tag">${escapeHtml(tx.group)}</span>` : ''}</div>
       </div>
       <div class="tx-amount mono ${tx.type}">${tx.type==='ingreso'?'+':'−'}${fmt(tx.amount)}</div>
       <div class="tx-edit">editar</div>
@@ -912,18 +1076,23 @@ function renderMonths(){
         <h3>Tu libreta está vacía</h3><p>Añade tu primer ingreso o gasto para empezar a llevar la cuenta.</p></div>`;
     return;
   }
-  const groups = groupByMonth();
-  const keys = Object.keys(groups).sort().reverse();
-  const visibleBlocks = keys.filter(k => activeFilter === 'all' || groups[k].some(tx => tx.type === activeFilter));
+  const monthGroups = groupByMonth();
+  const keys = Object.keys(monthGroups).sort().reverse();
+  const matchesGroupFilter = (tx) => activeGroupFilter === 'all'
+    || (activeGroupFilter === '__none__' && !tx.group)
+    || tx.group === activeGroupFilter;
+  const visibleBlocks = keys.filter(k => monthGroups[k].some(tx =>
+    (activeFilter === 'all' || tx.type === activeFilter) && matchesGroupFilter(tx)
+  ));
 
   if(visibleBlocks.length === 0){
-    main.innerHTML = `<div class="empty"><h3>Sin movimientos</h3><p>No hay ${activeFilter === 'gasto' ? 'gastos' : 'ingresos'} registrados todavía.</p></div>`;
+    main.innerHTML = `<div class="empty"><h3>Sin movimientos</h3><p>No hay movimientos que coincidan con los filtros seleccionados.</p></div>`;
     return;
   }
 
   main.innerHTML = visibleBlocks.map(k => {
-    const fullList = groups[k].slice().sort((a,b)=> b.date.localeCompare(a.date));
-    const list = activeFilter === 'all' ? fullList : fullList.filter(tx => tx.type === activeFilter);
+    const fullList = monthGroups[k].slice().sort((a,b)=> b.date.localeCompare(a.date));
+    const list = fullList.filter(tx => (activeFilter === 'all' || tx.type === activeFilter) && matchesGroupFilter(tx));
     const totals = computeTotals(fullList);
     const isCollapsed = collapsedMonths.has(k);
     return `
@@ -943,7 +1112,7 @@ function renderMonths(){
               <div class="tx-date mono">${tx.date.slice(8,10)}/${tx.date.slice(5,7)}</div>
               <div class="tx-desc">
                 <div>${escapeHtml(tx.description)}</div>
-                <div class="tx-desc-sub">${tx.method === 'tarjeta' ? '💳 ' + escapeHtml(tx.cardName || 'Tarjeta') : '💶 Efectivo'}</div>
+                <div class="tx-desc-sub">${tx.method === 'tarjeta' ? '💳 ' + escapeHtml(tx.cardName || 'Tarjeta') : '💶 Efectivo'}${tx.group ? `<span class="group-tag">${escapeHtml(tx.group)}</span>` : ''}</div>
               </div>
               <div class="tx-amount mono ${tx.type}">${tx.type==='ingreso'?'+':'−'}${fmt(tx.amount)}</div>
               <div class="tx-edit">editar</div>
@@ -980,6 +1149,46 @@ function renderCardsTab(){
   });
 }
 
+function renderGroupsTab(){
+  const list = $('groupsList');
+  if(groups.length === 0){
+    list.innerHTML = `<div class="cards-empty">Aún no has creado ningún grupo.<br>Añade uno arriba, por ejemplo "Viajes".</div>`;
+    return;
+  }
+  list.innerHTML = groups.map(name => `
+    <div class="card-item">
+      <div class="card-item-name"><span class="dot"></span>${escapeHtml(name)}</div>
+      <button class="card-remove" data-group="${escapeHtml(name)}">Eliminar</button>
+    </div>`).join('');
+  list.querySelectorAll('.card-remove').forEach(btn => {
+    btn.addEventListener('click', () => removeGroup(btn.getAttribute('data-group')));
+  });
+}
+
+/* ---------------- Groups management ---------------- */
+async function addGroup(){
+  const input = $('newGroupInput');
+  const name = input.value.trim();
+  if(!name){ showToast('Escribe un nombre para el grupo.'); return; }
+  if(groups.includes(name)){ showToast('Ese grupo ya existe.'); return; }
+  groups.push(name);
+  input.value = '';
+  await saveData();
+  renderGroupsTab();
+  renderGroupFilterSelect();
+  showToast('Grupo añadido.');
+}
+
+async function removeGroup(name){
+  const inUse = transactions.some(t => t.group === name);
+  if(inUse && !confirm(`"${name}" tiene movimientos asociados. ¿Eliminarlo igualmente? (los movimientos ya guardados no se borran, solo dejarán de tener ese grupo asignado en el filtro)`)) return;
+  groups = groups.filter(g => g !== name);
+  await saveData();
+  renderGroupsTab();
+  renderGroupFilterSelect();
+  showToast('Grupo eliminado.');
+}
+
 /* ---------------- Cards management ---------------- */
 async function addCard(){
   const input = $('newCardInput');
@@ -1000,6 +1209,157 @@ async function removeCard(name){
   await saveData();
   renderCardsTab();
   showToast('Tarjeta eliminada.');
+}
+
+/* ---------------- Recurrentes: UI ---------------- */
+function populateDaySelect(){
+  const sel = $('rDay');
+  sel.innerHTML = Array.from({length:31}, (_,i) => i+1).map(d => `<option value="${d}">${d}</option>`).join('');
+}
+function setRType(type){
+  rCurrentType = type;
+  $('rTypeGasto').classList.toggle('active', type === 'gasto');
+  $('rTypeIngreso').classList.toggle('active', type === 'ingreso');
+}
+function setRMethod(method){
+  rCurrentMethod = method;
+  $('rMethodEfectivo').classList.toggle('active', method === 'efectivo');
+  $('rMethodTarjeta').classList.toggle('active', method === 'tarjeta');
+  $('rCardSelectField').style.display = method === 'tarjeta' ? 'block' : 'none';
+  if(method === 'tarjeta') populateRCardSelect();
+}
+function populateRCardSelect(selected){
+  const sel = $('rCardSelect');
+  if(cards.length === 0){
+    sel.innerHTML = `<option value="">— No tienes tarjetas guardadas —</option>`;
+    return;
+  }
+  sel.innerHTML = cards.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if(selected && cards.includes(selected)) sel.value = selected;
+}
+function populateRGroupSelect(selected){
+  const sel = $('rGroupSelect');
+  sel.innerHTML = `<option value="">— Sin grupo —</option>` + groups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+  if(selected && groups.includes(selected)) sel.value = selected;
+}
+
+function resetRecurringForm(){
+  editingRecurringId = null;
+  $('recurringFormTitle').textContent = 'Nuevo movimiento recurrente';
+  setRType('gasto');
+  setRMethod('efectivo');
+  populateDaySelect();
+  populateRCardSelect();
+  populateRGroupSelect();
+  $('rAmount').value = '';
+  $('rDesc').value = '';
+  $('rDay').value = '1';
+  $('rDeleteBtn').classList.add('hidden');
+  $('rCancelEditBtn').classList.add('hidden');
+  $('rSaveBtn').textContent = 'Guardar recurrente';
+}
+
+function loadRecurringIntoForm(id){
+  const r = recurring.find(x => x.id === id);
+  if(!r) return;
+  editingRecurringId = id;
+  $('recurringFormTitle').textContent = 'Editar movimiento recurrente';
+  setRType(r.type);
+  setRMethod(r.method || 'efectivo');
+  populateDaySelect();
+  populateRCardSelect(r.cardName);
+  populateRGroupSelect(r.group);
+  $('rAmount').value = r.amount;
+  $('rDesc').value = r.description;
+  $('rDay').value = String(r.day || 1);
+  $('rDeleteBtn').classList.remove('hidden');
+  $('rCancelEditBtn').classList.remove('hidden');
+  $('rSaveBtn').textContent = 'Guardar cambios';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+async function handleSaveRecurring(){
+  const amount = parseFloat($('rAmount').value);
+  const description = $('rDesc').value.trim();
+  const day = parseInt($('rDay').value, 10);
+  const cardName = rCurrentMethod === 'tarjeta' ? $('rCardSelect').value : '';
+  const group = $('rGroupSelect').value;
+
+  if(isNaN(amount) || amount <= 0){ showToast('Introduce una cantidad válida.'); return; }
+  if(!description){ showToast('Añade una descripción.'); return; }
+  if(rCurrentMethod === 'tarjeta' && !cardName){ showToast('Selecciona o añade una tarjeta primero.'); return; }
+
+  if(editingRecurringId){
+    const r = recurring.find(x => x.id === editingRecurringId);
+    r.amount = amount; r.description = description; r.day = day; r.type = rCurrentType;
+    r.method = rCurrentMethod; r.cardName = cardName; r.group = group;
+  } else {
+    recurring.push({
+      id: genId(),
+      amount, description, day, type: rCurrentType, method: rCurrentMethod, cardName, group,
+      active: true,
+      startMonth: currentMonthKey(),
+      generated: []
+    });
+  }
+  await processRecurring();
+  await saveData();
+  resetRecurringForm();
+  renderRecurringTab();
+  showToast('Recurrente guardado. Se añadirá automáticamente cada mes.');
+}
+
+async function handleDeleteRecurring(){
+  if(!editingRecurringId) return;
+  const keepGenerated = confirm('¿Quieres borrar también los movimientos ya generados por este recurrente? Aceptar = sí, borrarlos. Cancelar = mantenerlos como movimientos normales.');
+  if(keepGenerated){
+    transactions = transactions.filter(t => t.recurringId !== editingRecurringId);
+  }
+  recurring = recurring.filter(r => r.id !== editingRecurringId);
+  await saveData();
+  resetRecurringForm();
+  render();
+  showToast('Recurrente eliminado.');
+}
+
+async function toggleRecurringActive(id){
+  const r = recurring.find(x => x.id === id);
+  if(!r) return;
+  r.active = r.active === false ? true : false;
+  await saveData();
+  renderRecurringTab();
+  showToast(r.active ? 'Recurrente reactivado.' : 'Recurrente pausado.');
+}
+
+function renderRecurringTab(){
+  const list = $('recurringList');
+  if(recurring.length === 0){
+    list.innerHTML = `<div class="recurring-empty">Aún no tienes movimientos recurrentes.<br>Añade uno arriba, por ejemplo tu nómina o el alquiler.</div>`;
+    return;
+  }
+  list.innerHTML = recurring.slice().sort((a,b)=> a.day - b.day).map(r => `
+    <div class="recurring-item ${r.active === false ? 'paused':''}" data-id="${r.id}">
+      <div class="recurring-item-top">
+        <div class="recurring-item-name">${escapeHtml(r.description)}${r.group ? `<span class="group-tag">${escapeHtml(r.group)}</span>` : ''}</div>
+        <div class="recurring-item-amount ${r.type}">${r.type==='ingreso'?'+':'−'}${fmt(r.amount)}</div>
+      </div>
+      <div class="recurring-item-meta">Cada mes, día ${r.day} · ${r.method === 'tarjeta' ? '💳 ' + escapeHtml(r.cardName || 'Tarjeta') : '💶 Efectivo'}${r.active === false ? ' · Pausado' : ''}</div>
+      <div class="recurring-item-actions">
+        <button data-action="edit">Editar</button>
+        <button data-action="toggle">${r.active === false ? 'Reactivar' : 'Pausar'}</button>
+        <button data-action="delete" class="danger">Eliminar</button>
+      </div>
+    </div>`).join('');
+
+  list.querySelectorAll('.recurring-item').forEach(el => {
+    const id = el.getAttribute('data-id');
+    el.querySelector('[data-action="edit"]').addEventListener('click', () => loadRecurringIntoForm(id));
+    el.querySelector('[data-action="toggle"]').addEventListener('click', () => toggleRecurringActive(id));
+    el.querySelector('[data-action="delete"]').addEventListener('click', () => {
+      editingRecurringId = id;
+      handleDeleteRecurring();
+    });
+  });
 }
 
 /* ---------------- Modal (add/edit movement) ---------------- */
@@ -1024,6 +1384,11 @@ function populateCardSelect(selected){
   sel.innerHTML = cards.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   if(selected && cards.includes(selected)) sel.value = selected;
 }
+function populateGroupSelect(selected){
+  const sel = $('fGroupSelect');
+  sel.innerHTML = `<option value="">— Sin grupo —</option>` + groups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+  if(selected && groups.includes(selected)) sel.value = selected;
+}
 
 function openModal(id){
   editingId = id || null;
@@ -1033,6 +1398,7 @@ function openModal(id){
     setType(tx.type);
     setMethod(tx.method || 'efectivo');
     populateCardSelect(tx.cardName);
+    populateGroupSelect(tx.group);
     $('fAmount').value = tx.amount;
     $('fDesc').value = tx.description;
     $('fDate').value = tx.date;
@@ -1042,6 +1408,7 @@ function openModal(id){
     setType('gasto');
     setMethod('efectivo');
     populateCardSelect();
+    populateGroupSelect();
     $('fAmount').value = '';
     $('fDesc').value = '';
     $('fDate').value = todayStr();
@@ -1057,6 +1424,7 @@ async function handleSave(){
   const description = $('fDesc').value.trim();
   const date = $('fDate').value;
   const cardName = currentMethod === 'tarjeta' ? $('fCardSelect').value : '';
+  const group = $('fGroupSelect').value;
 
   if(isNaN(amount) || amount <= 0){ showToast('Introduce una cantidad válida.'); return; }
   if(!description){ showToast('Añade una descripción.'); return; }
@@ -1066,11 +1434,11 @@ async function handleSave(){
   if(editingId){
     const tx = transactions.find(t => t.id === editingId);
     tx.amount = amount; tx.description = description; tx.date = date; tx.type = currentType;
-    tx.method = currentMethod; tx.cardName = cardName;
+    tx.method = currentMethod; tx.cardName = cardName; tx.group = group;
   } else {
     transactions.push({
-      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
-      amount, description, date, type: currentType, method: currentMethod, cardName
+      id: genId(),
+      amount, description, date, type: currentType, method: currentMethod, cardName, group
     });
   }
   await saveData();
@@ -1090,9 +1458,9 @@ async function handleDelete(){
 
 function exportCSV(){
   if(transactions.length === 0){ showToast('No hay movimientos para exportar.'); return; }
-  const rows = [['Fecha','Tipo','Descripción','Cantidad','Método','Tarjeta']];
+  const rows = [['Fecha','Tipo','Descripción','Cantidad','Método','Tarjeta','Grupo']];
   transactions.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(tx => {
-    rows.push([tx.date, tx.type, tx.description, tx.amount.toFixed(2), tx.method || 'efectivo', tx.cardName || '']);
+    rows.push([tx.date, tx.type, tx.description, tx.amount.toFixed(2), tx.method || 'efectivo', tx.cardName || '', tx.group || '']);
   });
   const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
@@ -1120,6 +1488,9 @@ $('exportBtn').addEventListener('click', exportCSV);
 $('addCardBtn').addEventListener('click', addCard);
 $('newCardInput').addEventListener('keydown', (e) => { if(e.key === 'Enter') addCard(); });
 $('goToCardsLink').addEventListener('click', () => { closeModal(); switchView('tarjetas'); });
+$('goToGroupsLink').addEventListener('click', () => { closeModal(); switchView('tarjetas'); });
+$('addGroupBtn').addEventListener('click', addGroup);
+$('newGroupInput').addEventListener('keydown', (e) => { if(e.key === 'Enter') addGroup(); });
 
 $('filterTabs').querySelectorAll('.filter-tab').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1128,18 +1499,35 @@ $('filterTabs').querySelectorAll('.filter-tab').forEach(btn => {
     renderMonths();
   });
 });
+$('groupFilterSelect').addEventListener('change', (e) => {
+  activeGroupFilter = e.target.value;
+  renderMonths();
+});
+
+/* ---------------- Recurrentes: listeners ---------------- */
+$('rTypeGasto').addEventListener('click', () => setRType('gasto'));
+$('rTypeIngreso').addEventListener('click', () => setRType('ingreso'));
+$('rMethodEfectivo').addEventListener('click', () => setRMethod('efectivo'));
+$('rMethodTarjeta').addEventListener('click', () => setRMethod('tarjeta'));
+$('rSaveBtn').addEventListener('click', handleSaveRecurring);
+$('rDeleteBtn').addEventListener('click', handleDeleteRecurring);
+$('rCancelEditBtn').addEventListener('click', resetRecurringForm);
+$('rGoToGroupsLink').addEventListener('click', () => switchView('tarjetas'));
 
 function switchView(view){
   activeView = view;
   $('navTabs').querySelectorAll('.nav-tab').forEach(b => b.classList.toggle('active', b.getAttribute('data-view') === view));
   $('viewMovimientos').classList.toggle('hidden', view !== 'movimientos');
   $('viewHistorial').classList.toggle('hidden', view !== 'historial');
+  $('viewRecurrentes').classList.toggle('hidden', view !== 'recurrentes');
   $('viewTarjetas').classList.toggle('hidden', view !== 'tarjetas');
   $('fabBtn').style.display = view === 'movimientos' ? '' : 'none';
 }
 $('navTabs').querySelectorAll('.nav-tab').forEach(btn => {
   btn.addEventListener('click', () => switchView(btn.getAttribute('data-view')));
 });
+
+populateDaySelect();
 
 /* ---------------- PWA: registrar service worker (instalable en móvil/PC) ---------------- */
 if('serviceWorker' in navigator){
