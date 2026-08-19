@@ -107,8 +107,9 @@ button:active{ transform:scale(0.97); }
 .btn-ghost:hover{ color:var(--text); border-color:var(--text-dim); }
 
 /* ---------- Nav tabs ---------- */
-.nav-tabs{ max-width:960px; margin:0 auto 18px; padding:0 20px; display:flex; gap:4px; border-bottom:1px solid var(--border); }
-.nav-tab{ background:transparent; color:var(--text-dim); font-size:14px; font-weight:500; padding:12px 4px; margin-right:22px; border-radius:0; border-bottom:2px solid transparent; position:relative; top:1px; }
+.nav-tabs{ max-width:960px; margin:0 auto 18px; padding:0 20px; display:flex; gap:4px; border-bottom:1px solid var(--border); overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+.nav-tabs::-webkit-scrollbar{ display:none; }
+.nav-tab{ background:transparent; color:var(--text-dim); font-size:14px; font-weight:500; padding:12px 4px; margin-right:22px; border-radius:0; border-bottom:2px solid transparent; position:relative; top:1px; white-space:nowrap; flex-shrink:0; }
 .nav-tab.active{ color:var(--text); border-bottom:2px solid var(--accent); font-weight:600; }
 .view{ animation:fadein .18s ease; display:block; }
 @keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
@@ -233,6 +234,33 @@ main{ max-width:960px; margin:14px auto 24px; padding:0 20px; }
 .recurring-item-actions button:hover{ color:var(--text); }
 .recurring-item-actions button.danger:hover{ color:var(--expense); }
 .recurring-empty{ color:var(--text-dim); font-size:13.5px; text-align:center; padding:30px 0; }
+
+/* ---------- Grupos tab ---------- */
+.groups-wrap{ max-width:960px; margin:0 auto; padding:0 20px 24px; }
+.group-form{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px; margin-bottom:20px; max-width:480px; }
+.group-form h3{ font-family:'Fraunces', serif; font-size:16px; margin-bottom:14px; }
+.group-form-row{ display:flex; gap:10px; }
+.group-form-row .emoji-field{ width:70px; flex:none; }
+.group-form-row input{ background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:11px 12px; color:var(--text); font-size:15px; }
+.group-form-row input.emoji-field{ text-align:center; font-size:19px; padding:11px 6px; }
+.group-form-row input:focus{ outline:none; border-color:var(--accent); }
+.group-form-row input.name-field{ flex:1; }
+.groups-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:14px; }
+.group-card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; cursor:pointer; transition:border-color .15s ease, background .15s ease; }
+.group-card:hover{ border-color:var(--accent); background:var(--surface-2); }
+.group-card-head{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+.group-card-emoji{ font-size:26px; line-height:1; }
+.group-card-name{ font-family:'Fraunces', serif; font-weight:600; font-size:15.5px; flex:1; }
+.group-card-stats{ display:flex; justify-content:space-between; font-size:12.5px; color:var(--text-dim); margin-bottom:10px; }
+.group-card-stats b{ font-family:'IBM Plex Mono', monospace; }
+.group-card-stats .income b{ color:var(--income); }
+.group-card-stats .expense b{ color:var(--expense); }
+.group-card-foot{ display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border); padding-top:10px; font-size:12px; color:var(--text-dim); }
+.group-card-actions{ display:flex; gap:10px; }
+.group-card-actions button{ background:none; border:none; color:var(--text-dim); font-size:12px; text-decoration:underline; padding:0; position:relative; z-index:1; }
+.group-card-actions button:hover{ color:var(--text); }
+.group-card-actions button.danger:hover{ color:var(--expense); }
+.groups-empty{ color:var(--text-dim); font-size:13.5px; text-align:center; padding:40px 0; }
 
 /* ---------- Empty state ---------- */
 .empty{ text-align:center; padding:60px 20px; color:var(--text-dim); }
@@ -410,8 +438,9 @@ service cloud.firestore {
 <nav class="nav-tabs" id="navTabs">
   <button class="nav-tab active" data-view="movimientos">Movimientos</button>
   <button class="nav-tab" data-view="historial">Historial</button>
+  <button class="nav-tab" data-view="grupos">Grupos</button>
   <button class="nav-tab" data-view="recurrentes">Recurrentes</button>
-  <button class="nav-tab" data-view="tarjetas">Tarjetas y grupos</button>
+  <button class="nav-tab" data-view="tarjetas">Tarjetas</button>
 </nav>
 
 <section id="viewMovimientos" class="view">
@@ -454,6 +483,27 @@ service cloud.firestore {
   <div id="historialCards" class="historial-cards"></div>
 </section>
 
+<section id="viewGrupos" class="view hidden">
+  <div class="groups-wrap" style="margin-top:16px;">
+    <div class="group-form">
+      <h3 id="groupFormTitle">Nuevo grupo</h3>
+      <div class="group-form-row">
+        <input type="text" id="newGroupEmojiInput" class="emoji-field" placeholder="🏷️" maxlength="4">
+        <input type="text" id="newGroupInput" class="name-field" placeholder="Ej. Viajes, Comida, Casa...">
+      </div>
+      <div class="field-hint" style="margin-top:8px;">Pon el emoji que quieras (puedes pegarlo desde el teclado de tu móvil) y el nombre del grupo.</div>
+      <div class="modal-actions" style="margin-top:14px;">
+        <button class="btn-delete hidden" id="groupDeleteBtn">Eliminar</button>
+        <button class="btn-primary" id="groupSaveBtn">Añadir grupo</button>
+      </div>
+      <div style="text-align:center; margin-top:10px;">
+        <button class="btn-ghost hidden" id="groupCancelEditBtn" style="border:none;">Cancelar edición</button>
+      </div>
+    </div>
+    <div id="groupsGrid"></div>
+  </div>
+</section>
+
 <section id="viewRecurrentes" class="view hidden">
   <div class="recurring-wrap" style="margin-top:16px;">
     <div class="recurring-form">
@@ -489,7 +539,7 @@ service cloud.firestore {
       <div class="field">
         <label for="rGroupSelect">Grupo (opcional)</label>
         <select id="rGroupSelect"></select>
-        <div class="field-hint">¿Falta uno? <a id="rGoToGroupsLink">Añádelo en Tarjetas y grupos</a></div>
+        <div class="field-hint">¿Falta uno? <a id="rGoToGroupsLink">Añádelo en la pestaña Grupos</a></div>
       </div>
       <div class="modal-actions" style="margin-top:16px;">
         <button class="btn-delete hidden" id="rDeleteBtn">Eliminar</button>
@@ -511,13 +561,6 @@ service cloud.firestore {
       <button class="btn-primary" id="addCardBtn">Añadir</button>
     </div>
     <div id="cardsList"></div>
-
-    <h3 style="font-family:'Fraunces', serif; font-size:16px; margin:26px 0 12px;">Grupos (categorías)</h3>
-    <div class="card-add-row">
-      <input type="text" id="newGroupInput" placeholder="Ej. Viajes, Comida, Casa...">
-      <button class="btn-primary" id="addGroupBtn">Añadir</button>
-    </div>
-    <div id="groupsList"></div>
   </div>
 </section>
 
@@ -557,7 +600,7 @@ service cloud.firestore {
     <div class="field">
       <label for="fGroupSelect">Grupo (opcional)</label>
       <select id="fGroupSelect"></select>
-      <div class="field-hint">¿Falta uno? <a id="goToGroupsLink">Añádelo en la pestaña Tarjetas y grupos</a></div>
+      <div class="field-hint">¿Falta uno? <a id="goToGroupsLink">Añádelo en la pestaña Grupos</a></div>
     </div>
     <div class="modal-actions">
       <button class="btn-delete" id="deleteBtn" style="display:none;">Eliminar</button>
@@ -576,6 +619,17 @@ service cloud.firestore {
     <div class="tx-list" id="monthOverlayList" style="border-top:1px solid var(--border); max-height:55vh; overflow-y:auto; margin:0 -24px; padding:0 24px;"></div>
     <div style="text-align:center; margin-top:16px;">
       <button class="btn-ghost" id="monthOverlayClose" style="border:none;">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="groupOverlay">
+  <div class="modal" style="max-width:520px;">
+    <h2 id="groupOverlayTitle">Grupo</h2>
+    <div class="month-figures" id="groupOverlayFigures" style="margin-bottom:14px; flex-wrap:wrap;"></div>
+    <div class="tx-list" id="groupOverlayList" style="border-top:1px solid var(--border); max-height:55vh; overflow-y:auto; margin:0 -24px; padding:0 24px;"></div>
+    <div style="text-align:center; margin-top:16px;">
+      <button class="btn-ghost" id="groupOverlayClose" style="border:none;">Cerrar</button>
     </div>
   </div>
 </div>
@@ -622,6 +676,7 @@ let currentUser = null;
 let rCurrentType = 'gasto';
 let rCurrentMethod = 'efectivo';
 let editingRecurringId = null;
+let editingGroupName = null;
 const collapsedMonths = new Set();
 
 let auth, db, googleProvider;
@@ -786,7 +841,7 @@ async function loadData(){
       const data = doc.data();
       transactions = data.transactions || [];
       cards = data.cards || [];
-      groups = data.groups || [];
+      groups = (data.groups || []).map(g => typeof g === 'string' ? { name: g, emoji: '🏷️' } : g);
       recurring = data.recurring || [];
     } else {
       transactions = [];
@@ -870,6 +925,12 @@ function monthKey(dateStr){ return dateStr.slice(0,7); }
 function monthLabel(key){ const [y,m] = key.split('-'); return `${MESES[parseInt(m,10)-1]} ${y}`; }
 function monthShortLabel(key){ const [y,m] = key.split('-'); return `${MESES[parseInt(m,10)-1].slice(0,3)} ${y.slice(2)}`; }
 function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+function getGroup(name){ return groups.find(g => g.name === name); }
+function groupEmoji(name){ const g = getGroup(name); return g ? g.emoji : '🏷️'; }
+function groupTagHtml(name){
+  if(!name) return '';
+  return `<span class="group-tag">${escapeHtml(groupEmoji(name))} ${escapeHtml(name)}</span>`;
+}
 
 function groupByMonth(){
   const groups = {};
@@ -904,8 +965,8 @@ function renderGroupFilterSelect(){
   const sel = $('groupFilterSelect');
   const prev = activeGroupFilter;
   sel.innerHTML = `<option value="all">Todos los grupos</option><option value="__none__">Sin grupo</option>` +
-    groups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
-  if(prev === 'all' || prev === '__none__' || groups.includes(prev)){
+    groups.map(g => `<option value="${escapeHtml(g.name)}">${escapeHtml(g.emoji)} ${escapeHtml(g.name)}</option>`).join('');
+  if(prev === 'all' || prev === '__none__' || groups.some(g => g.name === prev)){
     sel.value = prev;
   } else {
     activeGroupFilter = 'all';
@@ -1047,7 +1108,7 @@ function openMonthOverlay(key){
       <div class="tx-date mono">${tx.date.slice(8,10)}/${tx.date.slice(5,7)}</div>
       <div class="tx-desc">
         <div>${escapeHtml(tx.description)}</div>
-        <div class="tx-desc-sub">${tx.method === 'tarjeta' ? '💳 ' + escapeHtml(tx.cardName || 'Tarjeta') : '💶 Efectivo'}${tx.group ? `<span class="group-tag">${escapeHtml(tx.group)}</span>` : ''}</div>
+        <div class="tx-desc-sub">${tx.method === 'tarjeta' ? '💳 ' + escapeHtml(tx.cardName || 'Tarjeta') : '💶 Efectivo'}${groupTagHtml(tx.group)}</div>
       </div>
       <div class="tx-amount mono ${tx.type}">${tx.type==='ingreso'?'+':'−'}${fmt(tx.amount)}</div>
       <div class="tx-edit">editar</div>
@@ -1112,7 +1173,7 @@ function renderMonths(){
               <div class="tx-date mono">${tx.date.slice(8,10)}/${tx.date.slice(5,7)}</div>
               <div class="tx-desc">
                 <div>${escapeHtml(tx.description)}</div>
-                <div class="tx-desc-sub">${tx.method === 'tarjeta' ? '💳 ' + escapeHtml(tx.cardName || 'Tarjeta') : '💶 Efectivo'}${tx.group ? `<span class="group-tag">${escapeHtml(tx.group)}</span>` : ''}</div>
+                <div class="tx-desc-sub">${tx.method === 'tarjeta' ? '💳 ' + escapeHtml(tx.cardName || 'Tarjeta') : '💶 Efectivo'}${groupTagHtml(tx.group)}</div>
               </div>
               <div class="tx-amount mono ${tx.type}">${tx.type==='ingreso'?'+':'−'}${fmt(tx.amount)}</div>
               <div class="tx-edit">editar</div>
@@ -1150,42 +1211,142 @@ function renderCardsTab(){
 }
 
 function renderGroupsTab(){
-  const list = $('groupsList');
+  const grid = $('groupsGrid');
   if(groups.length === 0){
-    list.innerHTML = `<div class="cards-empty">Aún no has creado ningún grupo.<br>Añade uno arriba, por ejemplo "Viajes".</div>`;
+    grid.innerHTML = `<div class="groups-empty">Aún no has creado ningún grupo.<br>Añade uno arriba, por ejemplo "✈️ Viajes".</div>`;
     return;
   }
-  list.innerHTML = groups.map(name => `
-    <div class="card-item">
-      <div class="card-item-name"><span class="dot"></span>${escapeHtml(name)}</div>
-      <button class="card-remove" data-group="${escapeHtml(name)}">Eliminar</button>
-    </div>`).join('');
-  list.querySelectorAll('.card-remove').forEach(btn => {
-    btn.addEventListener('click', () => removeGroup(btn.getAttribute('data-group')));
+  const sorted = groups.slice().sort((a,b) => a.name.localeCompare(b.name));
+  grid.innerHTML = `<div class="groups-grid">${sorted.map(g => {
+    const list = transactions.filter(t => t.group === g.name);
+    const totals = computeTotals(list);
+    return `
+      <div class="group-card" data-group="${escapeHtml(g.name)}">
+        <div class="group-card-head">
+          <span class="group-card-emoji">${escapeHtml(g.emoji)}</span>
+          <span class="group-card-name">${escapeHtml(g.name)}</span>
+        </div>
+        <div class="group-card-stats">
+          <span class="income">Ingresos <b>${fmt(totals.income)}</b></span>
+          <span class="expense">Gastos <b>${fmt(totals.expense)}</b></span>
+        </div>
+        <div class="group-card-foot">
+          <span>${list.length} mov.</span>
+          <div class="group-card-actions">
+            <button data-action="edit">Editar</button>
+            <button data-action="delete" class="danger">Eliminar</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('')}</div>`;
+
+  grid.querySelectorAll('.group-card').forEach(el => {
+    const name = el.getAttribute('data-group');
+    el.addEventListener('click', (e) => {
+      if(e.target.closest('[data-action]')) return;
+      openGroupOverlay(name);
+    });
+    el.querySelector('[data-action="edit"]').addEventListener('click', () => loadGroupIntoForm(name));
+    el.querySelector('[data-action="delete"]').addEventListener('click', () => {
+      editingGroupName = name;
+      handleDeleteGroup();
+    });
   });
 }
 
-/* ---------------- Groups management ---------------- */
-async function addGroup(){
-  const input = $('newGroupInput');
-  const name = input.value.trim();
-  if(!name){ showToast('Escribe un nombre para el grupo.'); return; }
-  if(groups.includes(name)){ showToast('Ese grupo ya existe.'); return; }
-  groups.push(name);
-  input.value = '';
-  await saveData();
-  renderGroupsTab();
-  renderGroupFilterSelect();
-  showToast('Grupo añadido.');
+function openGroupOverlay(name){
+  const list = transactions.filter(t => t.group === name).slice().sort((a,b)=> b.date.localeCompare(a.date));
+  const totals = computeTotals(list);
+  const g = getGroup(name);
+
+  $('groupOverlayTitle').textContent = `${g ? g.emoji : '🏷️'} ${name}`;
+  $('groupOverlayFigures').innerHTML = `
+    <span class="chip income">+${fmt(totals.income)}</span>
+    <span class="chip expense">−${fmt(totals.expense)}</span>
+    <span class="chip benefit">${totals.benefit>=0?'':'−'}${fmt(Math.abs(totals.benefit))}</span>`;
+
+  $('groupOverlayList').innerHTML = list.map(tx => `
+    <div class="tx-row" data-id="${tx.id}">
+      <div class="tx-date mono">${tx.date.slice(8,10)}/${tx.date.slice(5,7)}/${tx.date.slice(2,4)}</div>
+      <div class="tx-desc">
+        <div>${escapeHtml(tx.description)}</div>
+        <div class="tx-desc-sub">${tx.method === 'tarjeta' ? '💳 ' + escapeHtml(tx.cardName || 'Tarjeta') : '💶 Efectivo'}</div>
+      </div>
+      <div class="tx-amount mono ${tx.type}">${tx.type==='ingreso'?'+':'−'}${fmt(tx.amount)}</div>
+      <div class="tx-edit">editar</div>
+    </div>`).join('') || `<div class="empty" style="padding:30px 0;">Sin movimientos en este grupo todavía.</div>`;
+
+  $('groupOverlayList').querySelectorAll('.tx-row').forEach(el => {
+    el.addEventListener('click', () => {
+      closeGroupOverlay();
+      openModal(el.getAttribute('data-id'));
+    });
+  });
+
+  $('groupOverlay').classList.add('open');
+}
+function closeGroupOverlay(){ $('groupOverlay').classList.remove('open'); }
+
+function resetGroupForm(){
+  editingGroupName = null;
+  $('groupFormTitle').textContent = 'Nuevo grupo';
+  $('newGroupEmojiInput').value = '';
+  $('newGroupInput').value = '';
+  $('groupDeleteBtn').classList.add('hidden');
+  $('groupCancelEditBtn').classList.add('hidden');
+  $('groupSaveBtn').textContent = 'Añadir grupo';
 }
 
-async function removeGroup(name){
-  const inUse = transactions.some(t => t.group === name);
-  if(inUse && !confirm(`"${name}" tiene movimientos asociados. ¿Eliminarlo igualmente? (los movimientos ya guardados no se borran, solo dejarán de tener ese grupo asignado en el filtro)`)) return;
-  groups = groups.filter(g => g !== name);
+function loadGroupIntoForm(name){
+  const g = getGroup(name);
+  if(!g) return;
+  editingGroupName = name;
+  $('groupFormTitle').textContent = 'Editar grupo';
+  $('newGroupEmojiInput').value = g.emoji;
+  $('newGroupInput').value = g.name;
+  $('groupDeleteBtn').classList.remove('hidden');
+  $('groupCancelEditBtn').classList.remove('hidden');
+  $('groupSaveBtn').textContent = 'Guardar cambios';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+/* ---------------- Groups management ---------------- */
+async function handleSaveGroup(){
+  const name = $('newGroupInput').value.trim();
+  const emoji = $('newGroupEmojiInput').value.trim() || '🏷️';
+  if(!name){ showToast('Escribe un nombre para el grupo.'); return; }
+
+  if(editingGroupName){
+    if(name !== editingGroupName && groups.some(g => g.name === name)){
+      showToast('Ya existe otro grupo con ese nombre.'); return;
+    }
+    const g = getGroup(editingGroupName);
+    g.name = name; g.emoji = emoji;
+    if(name !== editingGroupName){
+      transactions.forEach(t => { if(t.group === editingGroupName) t.group = name; });
+      recurring.forEach(r => { if(r.group === editingGroupName) r.group = name; });
+    }
+  } else {
+    if(groups.some(g => g.name === name)){ showToast('Ese grupo ya existe.'); return; }
+    groups.push({ name, emoji });
+  }
   await saveData();
-  renderGroupsTab();
-  renderGroupFilterSelect();
+  resetGroupForm();
+  render();
+  showToast('Grupo guardado.');
+}
+
+async function handleDeleteGroup(){
+  const name = editingGroupName;
+  if(!name) return;
+  const inUse = transactions.some(t => t.group === name);
+  if(inUse && !confirm(`"${name}" tiene movimientos asociados. ¿Eliminarlo igualmente? (los movimientos ya guardados no se borran, solo dejarán de tener grupo)`)) return;
+  groups = groups.filter(g => g.name !== name);
+  transactions.forEach(t => { if(t.group === name) t.group = ''; });
+  recurring.forEach(r => { if(r.group === name) r.group = ''; });
+  await saveData();
+  resetGroupForm();
+  render();
   showToast('Grupo eliminado.');
 }
 
@@ -1239,8 +1400,8 @@ function populateRCardSelect(selected){
 }
 function populateRGroupSelect(selected){
   const sel = $('rGroupSelect');
-  sel.innerHTML = `<option value="">— Sin grupo —</option>` + groups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
-  if(selected && groups.includes(selected)) sel.value = selected;
+  sel.innerHTML = `<option value="">— Sin grupo —</option>` + groups.map(g => `<option value="${escapeHtml(g.name)}">${escapeHtml(g.emoji)} ${escapeHtml(g.name)}</option>`).join('');
+  if(selected && groups.some(g => g.name === selected)) sel.value = selected;
 }
 
 function resetRecurringForm(){
@@ -1340,7 +1501,7 @@ function renderRecurringTab(){
   list.innerHTML = recurring.slice().sort((a,b)=> a.day - b.day).map(r => `
     <div class="recurring-item ${r.active === false ? 'paused':''}" data-id="${r.id}">
       <div class="recurring-item-top">
-        <div class="recurring-item-name">${escapeHtml(r.description)}${r.group ? `<span class="group-tag">${escapeHtml(r.group)}</span>` : ''}</div>
+        <div class="recurring-item-name">${escapeHtml(r.description)}${groupTagHtml(r.group)}</div>
         <div class="recurring-item-amount ${r.type}">${r.type==='ingreso'?'+':'−'}${fmt(r.amount)}</div>
       </div>
       <div class="recurring-item-meta">Cada mes, día ${r.day} · ${r.method === 'tarjeta' ? '💳 ' + escapeHtml(r.cardName || 'Tarjeta') : '💶 Efectivo'}${r.active === false ? ' · Pausado' : ''}</div>
@@ -1386,8 +1547,8 @@ function populateCardSelect(selected){
 }
 function populateGroupSelect(selected){
   const sel = $('fGroupSelect');
-  sel.innerHTML = `<option value="">— Sin grupo —</option>` + groups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
-  if(selected && groups.includes(selected)) sel.value = selected;
+  sel.innerHTML = `<option value="">— Sin grupo —</option>` + groups.map(g => `<option value="${escapeHtml(g.name)}">${escapeHtml(g.emoji)} ${escapeHtml(g.name)}</option>`).join('');
+  if(selected && groups.some(g => g.name === selected)) sel.value = selected;
 }
 
 function openModal(id){
@@ -1488,9 +1649,13 @@ $('exportBtn').addEventListener('click', exportCSV);
 $('addCardBtn').addEventListener('click', addCard);
 $('newCardInput').addEventListener('keydown', (e) => { if(e.key === 'Enter') addCard(); });
 $('goToCardsLink').addEventListener('click', () => { closeModal(); switchView('tarjetas'); });
-$('goToGroupsLink').addEventListener('click', () => { closeModal(); switchView('tarjetas'); });
-$('addGroupBtn').addEventListener('click', addGroup);
-$('newGroupInput').addEventListener('keydown', (e) => { if(e.key === 'Enter') addGroup(); });
+$('goToGroupsLink').addEventListener('click', () => { closeModal(); switchView('grupos'); });
+$('groupOverlayClose').addEventListener('click', closeGroupOverlay);
+$('groupOverlay').addEventListener('click', (e) => { if(e.target.id === 'groupOverlay') closeGroupOverlay(); });
+$('groupSaveBtn').addEventListener('click', handleSaveGroup);
+$('groupDeleteBtn').addEventListener('click', handleDeleteGroup);
+$('groupCancelEditBtn').addEventListener('click', resetGroupForm);
+$('newGroupInput').addEventListener('keydown', (e) => { if(e.key === 'Enter') handleSaveGroup(); });
 
 $('filterTabs').querySelectorAll('.filter-tab').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1512,13 +1677,14 @@ $('rMethodTarjeta').addEventListener('click', () => setRMethod('tarjeta'));
 $('rSaveBtn').addEventListener('click', handleSaveRecurring);
 $('rDeleteBtn').addEventListener('click', handleDeleteRecurring);
 $('rCancelEditBtn').addEventListener('click', resetRecurringForm);
-$('rGoToGroupsLink').addEventListener('click', () => switchView('tarjetas'));
+$('rGoToGroupsLink').addEventListener('click', () => switchView('grupos'));
 
 function switchView(view){
   activeView = view;
   $('navTabs').querySelectorAll('.nav-tab').forEach(b => b.classList.toggle('active', b.getAttribute('data-view') === view));
   $('viewMovimientos').classList.toggle('hidden', view !== 'movimientos');
   $('viewHistorial').classList.toggle('hidden', view !== 'historial');
+  $('viewGrupos').classList.toggle('hidden', view !== 'grupos');
   $('viewRecurrentes').classList.toggle('hidden', view !== 'recurrentes');
   $('viewTarjetas').classList.toggle('hidden', view !== 'tarjetas');
   $('fabBtn').style.display = view === 'movimientos' ? '' : 'none';
